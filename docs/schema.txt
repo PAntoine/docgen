@@ -1,0 +1,98 @@
+/* @statemachine:sm
+ * @title: title
+ * @desc:-
+ * 	multiline description and requires an ending or the end of the comment.
+ * @desc
+ *
+ * Some text rubbish for describing what the state machine does.
+ */
+
+/*
+ * @state:init
+ * @next:start
+ * @condition: on player start
+ *
+ *  This does this then this.
+ *  It then does this and that when required.
+ *
+ * @state:init
+ * @next:end
+ * @condition: on player fail to start
+ *
+ * It will do this action when the player starts
+ */  
+
+/*
+ * @state: name
+ * @machine: name
+ * @trigger: trigger condition
+ * @next: next_state_name
+ */
+
+if (state) has no (next) then seen as the entry point.
+if (state) has an (next) then seen as an exit point.
+There can be multiple exit points for any state, but only one entry point.
+
+You can define one @start and one @end point for the state machine. These will be
+defined if not defined in the code.
+
+=====================================================
+
+Sequence diagrams.
+
+@sendmessage: message_name
+@parameters: {stuff}
+@owner: who I belong to (lifeline).
+
+(note: if in a file with @lifeline when the @owner is not required as it will assume it belongs to the same lifeline)
+
+
+The @lifeline can be followed by a @class. What this will do is concatenate the @lifelines of the same class onto the
+diagram as the same lifeline. It will allow for a global diagram to be created as well as smaller ones.
+
+@waitformessage: message_name
+@activation: name_of_the_activation
+@sendmessage: new_message_name
+@condition: condition_that_the_message_is_sent
+
+if a message has a @sendmessage and a @waitformessage then these will be tied up and will order them on the diagram.
+
+
+[lifeline_a]                       [lifeline_b]
+    |------------ message ------------->|
+	|                              {activation}
+	|<----------- message --------------|
+
+
+/* @lifeline:lifeline_a
+ *
+ * @sendmessage: message
+ * @to:          lifeline_b
+ * @params:      {parameters}
+ */
+
+/* @lifeline: lifeline_b
+ * @waitsformessage: message
+ * @activation:		 activation_name
+ * @from:            lifeline_a
+ */
+
+/* @lifel: lifeline_b
+ * @sendm: message
+ * @param: blah_blah
+ * @to:    lifeline_a
+ * @activation: handle_message
+ * @tag:	some_internal_tag
+ * @after:	some_internal_tag
+ */
+
+If the events are ordered then the tags are used to force the order and not just use the order that they are
+found in the code.
+
+The @waitsformessage is used to tie a remote message into an activation. If not present the message will just 
+go to the lifeline at the point of calling. If the @after property is specified then the message can be ordered
+by the response cant be tied into an activation. So if the order of messages are important then the @tag and
+the @after should be placed in the header.
+
+
+
