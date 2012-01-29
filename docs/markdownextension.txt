@@ -1,0 +1,113 @@
+Things that are needed for this to work.
+
+Tables.
+-------
+
+I don't want to breakout into html, that is pants. So it makes more sense to extend the MarkDown syntax
+to allow for the tables to be drawn in text. So,
+
+
+   ================ ================= ============================================
+    column one        Column two       Column three
+   ================ ================= ============================================
+   text for one     text for two      text for three
+   ---------------- ----------------- --------------------------------------------
+   text for row two text for row two  text for four
+   that goes over
+   a line.
+   ---------------- ----------------- --------------------------------------------
+
+So, that a table starts with the === these define the size of the columns. The number of columns will
+be defines by the number of groups of ===='s.
+
+If the table does not start with the ===='s instead it starts with ----'s then there will be no header
+and only rows.
+
+The first column with MUST be greater that three '=' or '-' so that it fits with the MarkDown way of drawing
+a horizontal rule. Also, must start in a column greater that 1, for the same reason. Obviously they cannot
+be a table with a single line or there would be no way of detecting it from an underlined table.
+
+State Machines
+--------------
+
+idea 1:
+
+[start] -> [state1]
+[state1] (trigger=>triggers) -> [state2]
+[state2] -> [state3]
+[state3] -> [finish]
+
+This is easy to read for a parser to find an
+
+or
+
+ideas 2:
+
+This does not clash with MarkDown and is slightly more readable.
+
+1. {state: trigger => trigger,trigger,trigger} -> {state}
+2. {state: (trigger => trigger,trigger,trigger)} -> {state}
+3. {tune_channel: channel_lock => find_next} -> {load_database}
+
+or itea 3:
+
+s: name <= trigger
+        => trigger,trigger,trigger
+		-> s: name
+
+s: name <= trigger
+        => trigger,trigger,trigger
+		-> s: name
+
+s: name <= trigger
+        => trigger,trigger,trigger
+		-> s: name
+
+or:
+
+state1: (trigger => trigger,trigger,trigger) -> state2
+state2: (trigger => trigger,trigger,trigger) -> state2
+state1: ("if the world goes left" => trigger,trigger,trigger) -> state2
+state1: ("if the world goes left") -> state2
+
+
+for definition, try:
+
+[group:state_machine]
+
+state1: (trigger => trigger,trigger,trigger) -> state2
+state2: (trigger => trigger,trigger,trigger) -> state2
+state1: ("if the world goes left" => trigger,trigger,trigger) -> state2
+state1: ("if the world goes left") -> state2
+
+
+
+Note: Using Mealy Machines.
+
+graph://group.state_machine will generate the following.
+
+group.state_machine:
+	start: => state1
+	state1: trigger -> {trigger,trigger,trigger} => state2
+	state2: "some thing" -> {trigger,trigger,trigger} => state2
+	state1: "some thing" => state2
+	state3: -> trigger => state4
+	state3: trigger -> trigger => state4
+	state4: => finish
+
+dot://group.state_machine will generate a dot format text string. for
+the diagram, so that GraphViz can be used to generate a real state machine.
+
+table://group.state_machine will generate the following.
+
+group.state_machine:
+	state           input                     output                 next
+	--------------  ------------------------- ---------------------- -------------------
+	state1			trigger					  trigger,trigger		 state2
+	state1			trigger					  trigger,trigger		 state2
+	state1			trigger					  trigger,trigger		 state2
+	state1			trigger					  trigger,trigger		 state2
+
+group.state_machine:
+	state	input	-> output	=> next_state
+

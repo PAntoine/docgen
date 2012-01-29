@@ -1,0 +1,33 @@
+
+1. Memory Leaks
+
+There are definitely memory leaks in the handling of the triggers in the linker.
+The arrays that are added to the node are not cleared down.
+
+2. Name allocation
+
+Will have to replace what I have with a lookup table and proper allocation. Too much memory is being used and the names are having to be copied.
+
+3. Functions/Activations
+
+This is wrong. What I have currently called a function is actually an activation.
+
+It needs to change so when the C based stuff is include within the build then it can use the function name.
+
+I might be worth adding a "procedure" name into the system to allow for RPC to be done. But is that any different to a @send???
+
+4. linearisation 
+
+The expected behaviour should be to accept the messages in the order that they are found unless they are specifically given an order.
+This just seems sensible as the test function proves this as the calls in the wrong order took me ages to work out that it was due to the
+calls not having @after to order them (and that would have been ignored as at point of writing that functionality has been been done yet).
+
+5. Efficiency
+
+Some of the atoms lists are being searched to add to the end. What is required is an end of list pointer to handle this without searching.
+
+
+6. Duplication
+
+The message now has a redundant field (timeline) as sender has that information.
+

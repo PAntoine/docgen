@@ -1,4 +1,5 @@
-/* @statemachine:sm
+/**
+ * @statemachine:sm
  * @title: title
  * @desc:-
  * 	multiline description and requires an ending or the end of the comment.
@@ -7,7 +8,7 @@
  * Some text rubbish for describing what the state machine does.
  */
 
-/*
+/**
  * @state:init
  * @next:start
  * @condition: on player start
@@ -22,7 +23,7 @@
  * It will do this action when the player starts
  */  
 
-/*
+/**
  * @state: name
  * @machine: name
  * @trigger: trigger condition
@@ -64,20 +65,23 @@ if a message has a @sendmessage and a @waitformessage then these will be tied up
 	|<----------- message --------------|
 
 
-/* @lifeline:lifeline_a
+/**
+ * @lifeline:lifeline_a
  *
  * @sendmessage: message
  * @to:          lifeline_b
  * @params:      {parameters}
  */
 
-/* @lifeline: lifeline_b
+/**
+ * @lifeline: lifeline_b
  * @waitsformessage: message
  * @activation:		 activation_name
  * @from:            lifeline_a
  */
 
-/* @lifel: lifeline_b
+/**
+ * @lifel: lifeline_b
  * @sendm: message
  * @param: blah_blah
  * @to:    lifeline_a

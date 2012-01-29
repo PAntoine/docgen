@@ -1,0 +1,487 @@
+                        DOCUMENT GENERATOR
+
+						        by
+
+					      Peter Antoine
+					  2011 (c) Peter Antoine
+
+version: 1.0
+date:    5th Nov 2011
+
+1. Statement Of Purpose
+
+The doc_gen application is designed to create system documents from comments in the source code.
+It is especially designed to generate Sequence and State Machine diagrams.
+
+1.1 Reasoning.
+As with all document generators from code the main reason is to aid the keeping of documentation and
+code in sync. This is designed to allow for the extracted information to be able to be formatted in
+other ways and to have the documentation to be defined by a definition file so the documentation can
+be properly formatted. It is also good to be able to code actual documents and have the app stitch 
+the two together in a sensible way.
+
+1.2. Responsibilities.
+
+1.2.1 Locate all the special markers in the code tree and add them to a DB.
+1.2.2 Build the connected graphs for the different items.
+1.2.3 collate the document mark-up with the generated data.
+1.2.4 generate the resulting mark-up.
+1.2.5 for all steps above validate the data and return warning/errors.
+
+1.3. Specific Exclusions.
+
+1.3.1 Do not produce the resulting docs (only mark-up).
+1.3.2 Any form of pagination or layout that is for the final rendering tool.
+
+2. System Operation.
+
+2.1. Functional Operation
+
+To allow for build-tree conditional compilation. (In file conditionals will be ignored) the system will
+work in the same way as the C style compilers. That is a doc_compile function will run on all the source
+code file and produce data files that hold all the extracted information, after while a compile step will
+run that will then produce the final diagrams and then link in all the external data files and produce
+the final mark-up.
+
+The "compiler" will create the output files in the same way that compilers do and have the equivalent of
+the "-o" (output) flag. There should be no requirement for the the compiler to include any other file or
+configuration file as it will just create an "object" file of all the data items that it finds.
+
+The "linker" will take all the "object" files and validate then and then generate the mark-up. The compiler
+will take the list of created "object" files plus the support files to create the final mark-up. Also, the 
+"linker" may need to accept a configuration file for producing the final output.
+
+2.1.1 Peters Document Source Compiler (pdsc)
+
+This function will create the document object file (.dof) that is used by the document linker to to produce
+the final mark-up. The function will simply take in a source file and produce an object file as specified.
+This function can fail if an error is detected in the mark-up of the document.
+
+The objects in a source file can either be grouped explicitly by name. Though the name can be a macro that
+is passed into the compile function. This allow for multi items the be created and have meaningful and non
+contrived names.
+
+2.1.2 Peter Document Linker (pdl)
+
+This function will produce the final mark-up for the document. It will take a list of files. I will spit
+out a marked up function.
+
+3. Operation Rational
+
+The use of a compiler and a linker basically has the following reasons:
+
+3.1. Map Reduce
+As will all compilers the compile and link stages can be broken up and done in parallel if the build system
+will allow.
+
+3.2 Build System Friendly
+As the compile function can be placed in a makefile in the same way that the source compiler function can, it
+means that an almost duplicate rule can be used to generate the document object file.
+
+3.3 Partial Build
+Again as the make system can be used to select which source files have changed and which needs to be rebuilt
+this means that rebuilding the documents are the same as rebuilding the source and will speed up the creation
+of the documents.
+
+4. Design.
+
+4.1. Mark-up overview
+
+The mark-up style will follow the current conventions that are used in JavaDoc, Doxygen and others. Mostly 
+because they are familiar to most programmers and a lot of editors will recognise most of the syntax.
+
+So all mark-up fields will be defined within a C style comment with two leading **'s.
+
+i.e
+
+/**
+ * This is a comment block.
+ */
+
+The basic atom are have the following format:
+  @<atom_type>: -- atom value --
+
+The atom value can be one of the following types:
+
+  name           format/description
+  -------------  ------------------------------------
+  name           <atom_group>.<name>
+  literal        numeric or string literal
+  trigger        Logical statement for stating when the item is actioned.
+  text line      single line of text ended at the end of line.
+  text string    block text string ending with the <atom_type> or end of the comment.
+
+Also, the system will allow for macros $(macro_name) to replace all or part of the strings. This is
+mostly to allow for group type names to be tailored by the build. This will allow for the same file
+to be used by several build and be part of different system or sub systems.
+
+4.2 Structure
+
+All the graphs/diagrams are defined by nodes. All nodes need to have a type and a name. Also depending
+on what type of node it is then they may have other dependencies. For example that a state_machine node
+will have a @next: as all state machine nodes (with the exception of sm_end) have a next state.
+
+All the required atoms MUST be in the same comment block. If they are not present or cannot be inferred
+then the compiler will raise a warning and/or fail.
+
+The types of atom are TYPE, ACTION, ORDER, PAYLOAD and GROUPING. 
+
+4.2.1 TYPE
+Each node is a comment and must have one of the atoms that define the TYPE of node within the comment
+block. So for a state machine node the comment block should have the @state atom within. With the
+sequence diagram the @message atom must be defined.
+
+4.2.2 ACTION
+Each node should have an ACTION atom that will tell the compiler what the next node to transverse to is.
+Without an action atom then node will be assumed to be a terminating node.
+
+4.2.3 ORDER
+If a node is defined in several parts then the actions will be defined in the order that they are compiled.
+Unless a ORDER atom is found. I.e. if you require a message to be sent before another message that is not
+dependent on the previous atom then use @after: {name}, with {name} being the name of the previous atom.
+
+4.2.4 PAYLOAD
+The payload atom defines the content of the action. It may contain what the logical action would be i.e.
+the content of the message. Also, it may define other attributes of the action, i.e. when or if the action
+would occur. Examples of these atoms would be @condition, @if or @parameter.
+
+4.2.5 GROUPING
+Some of the atoms may need to be grouped together as a logical grouping. i.e. for the sequence diagram they
+have an "activation" that is a group of logically connected messages. So the grouping atoms are the atoms
+that are used to create these things. for the example given the group atom would be @activation. This would
+allow the mark-up to create a group and give it the attribute "activation". Groups are not required but
+the system to draw graphs. The grouping should come from the connections created by the actions.
+
+The group atoms do not override or interfere with the atom_group as this is used to control the connection
+of the graphs and is used to sub-divide the graphs. The GROUP names should not have an atom_group as this
+would remove the point of them as logical grouping on the diagrams and not as structural atoms.
+
+4.3 Source data files format
+
+The extra files should be based on Mark-Down and any output produced by the system can be referenced by
+using the Markdown URI escape <...> with the URI of pdiag://<atom_name>, i,e,
+
+<pdiag://group_name.state_machine>
+<pdiag://group_name.timeline>
+
+the default diagrams can be references via:
+
+<pdiag://state_machine>
+<pdiag://timeline>
+
+which will cause the main state machine diagram to be inserted at that point in the diagram. All items that
+have been produced by the system can be referenced more than once.
+
+Also, to access sub files, as this makes it possible to create books/web-pages then the following URI will
+be used pdoc://<file_name> and the builder will handle the creation of the reference links.
+
+All docs that are included are built as separate blobs and then referenced. If thev final target is to be
+a single object then that will be done by the render.
+
+NOTE: it is intended for the system to be extended to handle other data styles and tables and these will
+be added as there own URLs.
+
+The source files can specify sub-diagrams by creating diagrams based on the groups. So that diagrams can be
+defined as follows:
+
+<diagram_name> = include <atom_group>
+
+(Not the definition language may get extended).
+
+The resulting diagram may then be used as follows: pdiag://<diagram_name>
+
+4.4 ATOM descriptions (by data type)
+
+The current diagrams/data types supported are the Sequence Diagram and the State Machine.
+
+4.4.1 Sequence Diagram ATOMS
+
+4.4.1.1 Structure of a sequence diagram
+
+Sequence diagrams are described in the following way:
+
+[start] ----> [state_1] -----> [state_2] -----> [state_3] ----> [finish]
+   |             |               ^                 |
+   |             |               |                 |
+   |             v               |                 |
+   +-------> [state_4] ----------+                 |
+                 ^                                 |
+                 +---------------------------------+
+
+(As an example)
+
+This diagram has no triggers or conditions for the state transitions that can be specified for each of the
+transitions.
+
+4.4.1.1 Definitions of the allowed atoms
+
+@state: {state_name}
+ This defines the name of the state. It is also the type atom.
+ This atom does not have to be unique if it occurs more than once in a tree then they are seen as the same state.
+ The states MUST not have the same @next as this cannot be built in the tree.#
+
+@next: {state_name}
+ This defines the next transition of the state machine.
+ This atom must point to a state this has been defined within the group of states.
+
+@condition: {state}
+ This atom defines the condition that causes the transition to occur. This is mostly documentary and can be text.
+
+@trigger: <trigger_name>
+ This atom describes FORMALLY when the trigger occurs. This can be used to generate a formal state machine. The
+ trigger name will be created and checks can be made to see if the triggers are sent and received. This atom will
+ be displayed as a comment and also can be used to prove that the state machine is correct.
+
+ Note 1: that the trigger does not need to belong to group that the state machine is in. As it can be used to link
+ state machines in the system together. If the {location} states internal then the trigger will need to be generated
+ with the same group.
+
+ Also, triggers can work across the diagram types and also can just be fired. This will help stitch the whole system 
+ together.
+ 
+ Note 2: @trigger can also be stand alone if the trigger for a state machine is generate outside of the state machine.
+
+@triggers:
+This sends the trigger for the @trigger to receive. It can send a trigger across state machines or sequence diagrams.
+
+4.4.1.2 Validity of States
+ - All states must have the following atoms: @state and @next.
+ - The state pointed to by @next must exist and be defined within the same group.
+ - If a state has a @trigger the @triggers atom must be called at least once. (does not need to be within the group).
+ - A @trigger and @condition atom cannot exist within the same state.
+ - If the atom_group is used then this will divide the state machine.
+ - The state "finish" is implied and does not need to be defined. But, if it is defined it cannot have a @next atom.
+ - @state is allowed to to have a group, if it does not it defaults the global group.
+ - all other atoms are not allowed to specify the group (except @state, @trigger and @triggers).
+
+4.4.2 Sequence Diagram
+
+4.4.2.1 Structure of a Sequence Diagram
+
+[timeline_1]       [timeline_2]       [timeline_3]       [timeline_4]
+     |-------mess01----->|                  |                  |     
+     |                   |-mess02(a,b,c,d)->|                  |     
+     |<---------------mess04----------------|                  |     
+     |                   |-----mess05----->[ ]                 |     
+     |                   |                 [ ]----mess06------>|     
+     |                   |                 [ ]----mess07------>|     
+     |                   |                 [ ]<---mess08-------|     
+     |                   |<----mess09------[ ]                 |     
+     |<------mess10------|                  |                  |     
+     |<----mess11-[cona]-|                  |                  |     
+     |<----mess12-[conb]-|                  |                  |     
+
+(as an example)
+
+mess01: Simple message sent from timeline1 to timeline2
+mess02: message sent from timeline_2 to timeline_3 with parameters.
+mess04: Simple message sent from timeline_3 to timeline_1.
+mess05: Message sent from timeline_2 to timeline_3 and received within an activation.
+mess06: sent from within an activation.
+mess07: send after mess6 within an activation.
+mess08: waitfor mess7 and sent to an activation.
+mess09: waitfor mess8 then sent to timeline_2.
+mess10: waitfor mess9 and sent to timeline_1.
+mess11: sent on condition cona from timeline_2 to timeline_1.
+mess12: sent on condition conb from timeline_2 to timeline_1.
+
+These are the currently supported messages and conditionals supported.
+
+4.4.2.2 Definitions of the allowed atoms.
+
+@send: {name}
+ Send the named message.
+
+@call: {name}
+ Call the function as part of the sequence.
+
+@to: {life_line}
+ Defines the receiving timeline.
+ {limitations????}
+
+@condition: {condition string}
+ This is the textual condition that the message is sent on.
+
+@trigger: <trigger_name>
+ Same as defined for the state machine.
+
+@waitfor: {message_name}
+ This states that the message must be after the named message has arrived.
+
+@after: {message_name}
+ This states that the message will be sent after named message.
+ The named message MUST be sent from the same timeline.
+
+@timeline: {name}
+ The name of the timeline that the message is to be sent from.
+
+@responds: {message_name}
+ This the same as to, except that the response goes to the
+ timeline that sent the original message message_name.
+
+@repeats: {repeats string}
+ This atom states that the specific message repeats for the
+ condition given (this is text string).
+
+@activation: {activation_name}
+ This is a called activation that groups messages together and can be called from other
+
+@broadcast: {message_name}
+ This is a message that is sent to all timelines. Each instance of a broadcast can only
+ be matched once per timeline.
+
+4.4.2.2 Validity Of Sequences
+ 4.4.2.2.1 All Sequences must have either @call or @send.
+ 4.4.2.2.2 All Sequences must have a @to or @responds.
+ 4.4.2.2.3 Only one @waitfor atom can be specified per node.
+ 4.4.2.2.4 If @condition is specified the @trigger can not be. (and vis versa).
+ 4.4.2.2.5 If @trigger is specified then one @triggers must be specified (does not have to be within a sequence diagram).
+ 4.4.2.2.6 The message pointed to by @responds must have been sent to the current timeline.
+ 4.4.2.2.7 The @after clause can be specified on a message or an activation, from the same timeline.
+ 4.4.2.2.8 All messages must what a corresponding @waitsfor.
+
+4.5 Intermediate object file format.
+
+A simple file format that has the basic information.
+
+magic no = 0x70647363  (pdsc)
+version  = 0xMMmm      (Major/Minor)
+date     = 0xddmmyymmsspp (1 byte padding to keep the size word aligned)
+size     = number of records in the file
+name     = [length]<file-name as passed into the compiler>	(length is an unsigned int)
+<records>
+
+There are three types of records: group, name, string.
+
+The records all have the same format.
+
+[type:ATOM:GROUP:<string>]
+
+For the group, obviously ATOM and GROUP will always be zero, and the group name will be the string.
+The others all fields are valid.
+
+Also, the groups are referenced in order that they are found in the file. 
+
+So the layout of the record is:
+
+byte 0 = type
+byte 1 = atom
+word 2 = group/function
+word 4 = name_size
+byte 6 - name_size bytes = name (this is not null terminated)
+
+As function are groupless and just exist, they can share the same field.
+
+4.6 Linking Rules
+
+4.6.1 Global Structure.
+
+The structure of the document will have a list of groups, each group is allowed to hold one of each 
+of the supported diagrams (at the moment a state_machine and a sequence_diagram).
+
+Also, the document will also have a list of triggers as this work outside of the diagrams. The triggers
+are like all other elements in the system, if a trigger is referenced before it is defined then it will
+be created as a ghost trigger and when it is defined this flag will be removed.
+
+There is also an un-named default group that all items that do not have a specific group name belong to.
+This group has the same requirements as all groups that only one diagram of any type can be used.
+
+4.6.2 Linking the State_Machine
+
+Each state is simply a list of transitions. As each of the atoms in the state machine are added then
+the new transition will be added to the state that it belongs to. If it points to a state that does
+not exist that state will be created as a "ghost" state and the connection made. When the state is
+defined at a later state then the ghost flag will be removed.
+
+As the states are added any transitions that are identical will be flagged as errors.
+
+Also, transitions will be within the same state machine an this can be checked at this point.
+
+Any triggers that are references will be looked up in the trigger list, if it already exists then it
+will be referenced. Any trigger that is waited on, and is not defined will be created as a ghost 
+trigger and when a definition is created then the ghost flag will be removed.
+
+If the state_machine must be formal then all the states with transitions must have either a @waitfor
+or a @condition specified.
+
+4.6.3 Linking the sequence diagrams
+
+The structure of the sequence diagram is a series of linked items. There are three element types to
+the sequence diagram, the message/function call, then timeline and the activity.
+
+4.6.3.1 Messages
+
+Messages are transitions between timelines. Messages belong to the timeline that they are sent from. The
+receiving timeline must have a @waitfor for each message sent. This means that all messages sent are
+handled by some code. All messages are unique. If a message of the same name is sent it needs to be matched
+each time, and the nearest match will be used.
+
+Broadcast is a speciality message that is sent to all timelines that exist. They do not need to be matched
+except once. They can only be matched once in each timeline.
+
+4.6.3.2 Timelines
+
+Timelines is a sequential ordering of messages. The time line is made up of message or activity connections.
+These connections reference specific messages or an activity. The @after clause and the order
+that the order that the messages are found define the timeline.
+
+4.6.3.3 Nodes
+
+Timelines are made up of nodes. The nodes are the points on the timeline where the messages are sent and
+the messages are received. The nodes are allowed to generate triggers. These are not generated by the
+messages as with the state transitions. All messages originate and arrive at a node, tags are attached to
+nodes and the nodes are generated and cannot be references directly.
+
+A @waitfor node will be generated for any message that does not already have a node. If the @waitfor has
+other nodes or things dependant on them and there is an unsatisfied message then all the nodes for that
+dependency will also be duplicated.
+
+4.6.3.4 Activations
+
+These are collections of messages. The activations (if in a C/C++ file) will populate the parameters for
+the call. Any messages that are define within the start/end markers (in C/C++ these are '{' and '}'
+respectively). These are referenced counted so that the matching pair are used to bound the activation.
+The messages that are found in the activation are attached in the order that they are found.
+
+The activation is similar to the activation as the messages within the activation will be a link of nodes.
+except the activation will be integrated within the timeline that calls it.
+
+As the activation cannot be linked until all the files have been read and the places that require activations
+have been found. The activations are to be integrated into the timelines that call them, so all the messages
+that are used by the activation must be looked up then. So the activation can only list the nodes as lookups.
+It needs to track the activation names and trigger names for looking up later.
+
+Also, nodes within a message cannot have a sequence outside the activation. It is also assumed that messages
+within a activation are in order and should not have a @after node. (This may change).
+
+Activations can only be called within the current timeline. They can be called within a @waitfor block and
+if they are then the message that @waitfor is waiting for is used within any @responds block that does not
+have a specific @waitfor.
+
+Activations cannot have any atoms that define which timeline they live in. It has to position independent 
+so can be included and fixed up at any time. 
+
+4.6.3.5 Node Fix-ups
+
+The timelines are fixed up in the order of the first timeline to the last found in the sequence diagram. The
+nodes are fixed starting with the first node found. Each timeline has control while it is in a sequence. I.e.
+when a node the has a dependency or is the last in the chain of dependencies is being processed. Functions
+members are also dependencies.
+
+The following algorithm should be followed:
+
+<TODO: re-write the algorithm >
+
+
+4.7 Final Output
+
+The other input files (*.pmd) will be read in and scanned for the <pdiag://> url and anyplace that this is
+found on the next new line then the diagram will be inserted. The default for the diagrams are text ascii
+art representations. Also the output will also be as *.md files. The output will follow the standard 
+MarkDown rules. 
+
+The diagrams will be output as group_name_diagram.md for each of the diagrams found in the source tree.
+
+Extension information can be added to the nodes in the sequence trees, these extensions can add links to
+the actual source code lines that defines the atom states and the messages and transitions for the message
+states.
