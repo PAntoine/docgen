@@ -31,12 +31,12 @@ endif
 
 export PATH_SEPARATOR = 0x2f
 
-SPECIAL_FILES = source/atoms.c source/document_linker.c source/document_source_compiler.c
+SPECIAL_FILES = source/atoms.c source/document_linker.c source/document_source_compiler.c source/document_processor.c
 HEADER_FILES = $(wildcard include/*.h)
 SOURCE_FILES = source/atoms.c $(filter-out $(SPECIAL_FILES),$(wildcard source/*.c))
 OBJECT_FILES = $(subst source,object,$(subst .c,.o,$(SOURCE_FILES)))
 
-all: pdsc pdsl tests
+all: exes tests
 
 exes: pdsc pdsl
 
@@ -46,7 +46,10 @@ pdsc : object $(OBJECT_FILES) source/document_source_compiler.c
 pdsl : object $(OBJECT_FILES) source/document_linker.c
 	@$(CC) $(CFLAGS) source/document_linker.c -o pdsl $(OBJECT_FILES) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
 
-tests: pdsc pdsl
+pdp : object $(OBJECT_FILES) source/document_processor.c
+	@$(CC) $(CFLAGS) source/document_processor.c -o pdp $(OBJECT_FILES) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+
+tests: pdsc pdsl pdp
 	@$(MAKE) -C tests
 
 include/atoms.h source/atoms.c: source/atoms.list

@@ -14,25 +14,23 @@
  *                    Released Under the Artistic Licence
  *--------------------------------------------------------------------------------*/
 
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include "utilities.h"
 #include "error_codes.h"
-#include "supported_formats.h"
 #include "document_generator.h"
 
 static unsigned char	record_buffer[MAX_RECORD_SIZE];
 
 extern unsigned char*	g_input_filename;
 extern unsigned char*	g_source_filename;
-extern unsigned char	g_file_header[];
 extern unsigned int		g_source_filename_length;
 
 unsigned char	finish_state[] = "finish";
 unsigned int	finish_state_length = sizeof(finish_state);
-
-extern OUTPUT_FORMATS	output_formats[];
 
 /*--------------------------------------------------------------------------------*
  * The linking options
@@ -42,138 +40,8 @@ static unsigned int	g_max_call_depth	= 10;
 /*--------------------------------------------------------------------------------*
  * Linking Structures
  *--------------------------------------------------------------------------------*/
-static GROUP 	g_group_tree = {{0x00},0,0,NULL,NULL,NULL,NULL};
+GROUP 	g_group_tree = {{0x00},0,0,NULL,NULL,NULL,NULL};
 static FUNCTION	g_function_list = {0,0,{0x00},NULL,NULL};
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : debug_dump_node
- * Desc : thid function will dump the node.
- *--------------------------------------------------------------------------------*/
-void	debug_dump_node(NODE* current_node)
-{
-	if (current_node == NULL)
-		return;
-
-		printf("flags: %c%c%c%c%c ",
-				(current_node->flags & FLAG_SEQUENCE_RESPONDS)?'r':' ',
-				(current_node->flags & FLAG_FUNCTION)?'f':' ',
-				(current_node->flags & FLAG_IN_FUNCTION)?'i':' ',
-				(current_node->flags & FLAG_FUNCTION_END)?'e':' ',
-				(current_node->flags & FLAG_BROADCAST)?'b':' ',
-				(current_node->flags & FLAG_WAIT)?'w':' ');
-
-		printf("cn: %p ",current_node);
-
-		if (current_node->timeline != NULL)
-			printf("t: %s ",current_node->timeline->name);
-
-		if (current_node->sent_message != NULL)
-			printf("s: %s ",current_node->sent_message->name);
-		
-		if (current_node->received_message != NULL)
-			printf("r: %s ",current_node->received_message->name);
-
-		if (current_node->sent_message != NULL && current_node->sent_message->receiver != NULL)
-			printf(" (%s) ",current_node->sent_message->receiver->timeline->name);
-
-		if (current_node->wait_message.name_length > 0)
-			printf(" w: %s ",current_node->wait_message.name);
-
-		printf("next: %p ",current_node->next);
-
-		printf("\n");
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : next_active_node
- * Desc : This function handles the active part of the search.
- *--------------------------------------------------------------------------------*/
-NODE*	next_active_node(NODE* current_node)
-{
-	NODE* result = NULL;
-
-	if (current_node->sent_message != NULL)
-	{
-		result = current_node->sent_message->receiver;
-
-		/* if there is a target and it is not a message to self */
-		if (result != NULL && result->timeline != current_node->timeline)
-		{
-			result->return_node = current_node;
-		}
-		else
-		{
-			result = current_node->next;
-		}
-	}
-	else
-	{
-		/* ok, goto to the next item in the tree */
-		if (current_node->flags & (FLAG_FUNCTION | FLAG_IN_FUNCTION))
-		{
-			result = current_node->next;
-		}
-		else if ((current_node->flags & FLAG_FUNCTION_END))
-		{
-			/* check to see if the function was called */
-			if (current_node->return_node->return_node != NULL)
-			{
-				result = current_node->return_node->return_node->next;
-			}
-			else
-			{
-				result = current_node->next;
-			}
-		}
-		else if (current_node->return_node)
-		{
-			/* only if the function was called */
-			result = current_node->return_node->next;
-		}
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : search_next_node
- * Desc : This function will search for an active node. This is a node that should
- *        be actioned. Which will be a node that does a send without a receive.
- *--------------------------------------------------------------------------------*/
-NODE*	search_next_node(NODE* current_node, NODE** active_node)
-{
-	NODE* result = NULL;
-	
-	*active_node = NULL;
-
-	while (current_node != NULL)
-	{
-		if (current_node->wait_message.name_length > 0)
-		{
-			if (current_node->flags & FLAG_FUNCTION)
-			{
-				current_node = current_node->function_end;
-			}
-			else
-			{
-				current_node = current_node->next;
-			}
-		}
-		else if (current_node->sent_message != NULL)
-		{
-			*active_node = current_node;
-			
-			result = current_node->next;
-			break;
-		}
-		else
-		{
-			current_node = current_node->next;
-		}
-	}
-
-	return result;
-}
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : test_walk_node_tree
@@ -204,235 +72,6 @@ void	test_walk_node_tree(NODE* start)
 		}
 	}
 	while (search_node != NULL);
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : add_group
- * Desc : This function will add the named group to the list. It should only be
- *        called after the item has been searched for, otherwise duplicates will
- *        be added to the list as this function does not check for the name
- *        previously existing.
- *--------------------------------------------------------------------------------*/
-GROUP*	add_group ( unsigned char* name, unsigned int name_length )
-{
-	GROUP* result = NULL;
-	GROUP* current = &g_group_tree;
-
-	while (current != NULL)
-	{
-		if (current->next == NULL)
-		{
-			current->next = calloc(1,sizeof(GROUP));
-			memcpy(current->next->name,name,name_length);
-			current->next->name_length = name_length;
-			result = current->next;
-			break;
-		}
-
-		current = current->next;
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : find_group
- * Desc : This function will lookup the GROUP in the group list. If the group list
- *        has the named group it will return the first one it finds. Else, it will
- *        return NULL.
- *--------------------------------------------------------------------------------*/
-GROUP* find_group ( unsigned char* name, unsigned int name_length )
-{
-	GROUP* result = NULL;
-	GROUP* current = &g_group_tree;
-
-	while (current != NULL)
-	{
-		if (current->name_length == name_length && memcmp(current->name,name,name_length) == 0)
-		{
-			result = current;
-			break;
-		}
-		current = current->next;
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : find_state
- * Desc : This function will find the state in the state tree for the given
- *        group.
- *--------------------------------------------------------------------------------*/
-STATE* find_state ( GROUP* group, unsigned char* name, unsigned int name_length )
-{
-	STATE*	result = NULL;
-	STATE*	current_state = NULL;
-
-	if (group != NULL)
-	{
-		if (group->state_machine != NULL && group->state_machine->state_list != NULL)
-		{
-			current_state = group->state_machine->state_list;
-
-			do
-			{
-				if (current_state->name_length == name_length && memcmp(current_state->name,name,name_length) == 0)
-				{
-					result = current_state;
-					break;
-				}
-
-				current_state = current_state->next;
-			}
-			while (current_state != NULL);
-		}
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : add_state
- * Desc : This function will add the state to the state list. It will not check to
- *        see if the state already exists, so this function MUST be called after
- *        the find has been called or duplicate states will occur and the results
- *        will be unpredictable.
- *--------------------------------------------------------------------------------*/
-STATE* add_state ( GROUP* group, unsigned char* name, unsigned int name_length, unsigned int line_number, unsigned int flags )
-{
-	STATE*	result = NULL;
-	STATE*	current_state = NULL;
-
-	if (group != NULL)
-	{
-		if (group->state_machine == NULL)
-		{
-			/* ok, first state */
-			group->state_machine = calloc(1,sizeof(STATE_MACHINE));
-			group->state_machine->state_list = calloc(1,sizeof(STATE));
-
-			current_state = group->state_machine->state_list;
-			group->state_machine->group = group;
-		}
-		else
-		{
-			current_state = group->state_machine->state_list;
-
-			while (current_state != NULL)
-			{
-				if (current_state->next == NULL)
-				{
-					current_state->next = calloc(1,sizeof(STATE));
-					current_state = current_state->next; 
-					break;
-				}
-
-				current_state = current_state->next;
-			}
-		}
-
-		/* Ok, current state is the new state - now fill it in */
-		current_state->name = malloc(name_length);
-		current_state->flags = flags;
-		current_state->name_length = name_length;
-		current_state->group = group;
-		current_state->line_number = line_number;
-
-		memcpy(current_state->name,name,name_length);
-		
-		result = current_state;
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : find_timeline
- * Desc : This function will find the timeline in the timeline tree for the given
- *        group.
- *--------------------------------------------------------------------------------*/
-TIMELINE* find_timeline ( GROUP* group, unsigned char* name, unsigned int name_length )
-{
-	TIMELINE*	result = NULL;
-	TIMELINE*	current_timeline = NULL;
-
-	if (group != NULL)
-	{
-		if (group->sequence_diagram != NULL && group->sequence_diagram->timeline_list != NULL)
-		{
-			current_timeline = group->sequence_diagram->timeline_list;
-
-			do
-			{
-				if (current_timeline->name_length == name_length && memcmp(current_timeline->name,name,name_length) == 0)
-				{
-					result = current_timeline;
-					break;
-				}
-
-				current_timeline = current_timeline->next;
-			}
-			while (current_timeline != NULL);
-		}
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : add_timeline
- * Desc : This function will add the timeline to the timeline list. It will not check to
- *        see if the timeline already exists, so this function MUST be called after
- *        the find has been called or duplicate timelines will occur and the results
- *        will be unpredictable.
- *--------------------------------------------------------------------------------*/
-TIMELINE* add_timeline ( GROUP* group, unsigned char* name, unsigned int name_length, unsigned int line_number, unsigned int flags )
-{
-	TIMELINE*	result = NULL;
-	TIMELINE*	current_timeline = NULL;
-
-	if (group != NULL)
-	{
-		if (group->sequence_diagram == NULL)
-		{
-			/* ok, first timeline */
-			group->sequence_diagram = calloc(1,sizeof(SEQUENCE_DIAGRAM));
-			group->sequence_diagram->timeline_list = calloc(1,sizeof(TIMELINE));
-
-			current_timeline = group->sequence_diagram->timeline_list;
-			group->sequence_diagram->group = group;
-		}
-		else
-		{
-			current_timeline = group->sequence_diagram->timeline_list;
-
-			while (current_timeline != NULL)
-			{
-				if (current_timeline->next == NULL)
-				{
-					current_timeline->next = calloc(1,sizeof(TIMELINE));
-					current_timeline = current_timeline->next; 
-					break;
-				}
-
-				current_timeline = current_timeline->next;
-			}
-		}
-
-		/* Ok, current timeline is the new timeline - now fill it in */
-		current_timeline->name = malloc(name_length);
-		current_timeline->flags = flags;
-		current_timeline->name_length = name_length;
-		current_timeline->group = group;
-		current_timeline->line_number = line_number;
-
-		memcpy(current_timeline->name,name,name_length);
-		
-		result = current_timeline;
-	}
-
-	return result;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -517,7 +156,6 @@ TRIGGER* add_trigger ( GROUP* group, unsigned char* name, unsigned int name_leng
 	return result;
 }
 
-
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_triggers
  * Desc : This function will add the triggers to the transition. It will look down
@@ -587,7 +225,7 @@ MESSAGE*	create_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
 	{
 		sender->timeline->group->max_message_length = name->name_length;
 	}
-
+	
 	/* set the values in new message */
 	memcpy(new_message->name,name->name,name->name_length);
 	new_message->sender = sender;
@@ -862,7 +500,6 @@ unsigned int	add_block_function(BLOCK_NODE* block, FUNCTION** local_function_lis
 	
 	return result;
 }
-
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_block_state
@@ -1309,8 +946,9 @@ unsigned int	process_input(const char* filename)
 	unsigned int	record_size;
 	unsigned int	file_name_size;
 	unsigned int	new_block_number;
+	unsigned char	signature[4] = COMPILED_SOURCE_MAGIC;
 	unsigned char	record[RECORD_DATA_START];
-	unsigned char	header[INTERMEDIATE_HEADER_SIZE];
+	unsigned char	header[FILE_HEADER_SIZE];
 	BLOCK_NODE		block_node;
 	
 	static GROUP*		local_group[MAX_GROUPS_PER_FILE];
@@ -1329,24 +967,23 @@ unsigned int	process_input(const char* filename)
 
 	if ((infile = open(filename,READ_FILE_STATUS,0)) != -1)
 	{
-		g_input_filename = (unsigned char*) filename;
-		
 		/* reset the local list */
 		num_groups = 1;
 		num_functions = 1;
 
-		if (read(infile,header,INTERMEDIATE_HEADER_SIZE) == INTERMEDIATE_HEADER_SIZE)
+		if (read(infile,header,FILE_HEADER_SIZE) == FILE_HEADER_SIZE)
 		{
-			if(memcmp(header,g_file_header,4) == 0)
+			if(memcmp(header,signature,4) == 0)
 			{
 				/* we have a object file -- we are ignoring all other files at this pass */
-				if (header[INTERMEDIATE_VERSION_MAJOR_OFF] > VERSION_MAJOR)
+				if (header[FILE_VERSION_MAJOR] > VERSION_MAJOR)
 				{
 					raise_warning(0,EC_INPUT_FILE_BUILT_WITH_LATER_MAJOR_VERSION,NULL,NULL);
+					result = 1;
 				}
 
 				/* read the input file name */
-				file_name_size = ((((unsigned int)header[INTERMEDIATE_NAME_START_OFF]) << 8) | header[INTERMEDIATE_NAME_START_OFF+1]);
+				file_name_size = ((((unsigned int)header[FILE_NAME_START]) << 8) | header[FILE_NAME_START+1]);
 
 				if (file_name_size < FILENAME_MAX)
 				{
@@ -1390,6 +1027,7 @@ unsigned int	process_input(const char* filename)
 						{
 							/* failed to read the record --- problem with the file */
 							raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
+							result = 1;
 						}
 						else
 						{
@@ -1404,9 +1042,9 @@ unsigned int	process_input(const char* filename)
 									break;
 
 								case INTERMEDIATE_RECORD_GROUP:
-									if ((local_group[num_groups] = find_group(record_buffer,record_size)) == NULL)
+									if ((local_group[num_groups] = find_group(&g_group_tree,record_buffer,record_size)) == NULL)
 									{
-										local_group[num_groups] = add_group(record_buffer,record_size);
+										local_group[num_groups] = add_group(&g_group_tree,record_buffer,record_size);
 									}
 
 									num_groups++;
@@ -1419,6 +1057,7 @@ unsigned int	process_input(const char* filename)
 
 								default:
 									raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
+									result = 1;
 							}
 						}
 					}
@@ -1429,275 +1068,17 @@ unsigned int	process_input(const char* filename)
 					add_block(&block_node,local_group,local_functions);
 				}
 			}
+			else
+			{
+				raise_warning(0,EC_INPUT_FILE_SIGNATURE_INCORRECT,(unsigned char*)filename,NULL);
+				result = 1;
+			}
 		}
 
 		close(infile);
 	}
 
 	g_source_filename = NULL;
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : generate_state_machine
- * Desc : This function will produce a dot file for the given state machine.
- *--------------------------------------------------------------------------------*/
-void	generate_state_machine(DRAW_STATE* draw_state, STATE_MACHINE* state_machine)
-{
-	STATE*				current_state;
-
-	output_formats[draw_state->format].output_header(draw_state,state_machine->group->name,state_machine->group->name_length);
-	output_formats[draw_state->format].output_states(draw_state,state_machine->state_list);
-	
-	current_state = state_machine->state_list;
-
-	while (current_state != NULL)
-	{
-		output_formats[draw_state->format].output_state(draw_state,current_state);
-
-		current_state = current_state->next;
-	}
-
-	output_formats[draw_state->format].output_footer(draw_state);
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : generate_columns
- * Desc : This function will count the number of columns in the sequence diagram
- *        and will calculate the text column offset for each of the timelines.
- *--------------------------------------------------------------------------------*/
-void	generate_columns(SEQUENCE_DIAGRAM* sequence_diagram, DRAW_STATE* draw_state)
-{
-	unsigned short	pos = 0;
-	unsigned short	half_length = 0;
-	TIMELINE*		current_timeline = sequence_diagram->timeline_list;
-
-	unsigned char	debug[2048];
-
-	draw_state->data.sequence.num_columns = 0;
-
-	while (current_timeline != NULL)
-	{
-		if (memcmp("broadcast",current_timeline->name,sizeof("broadcast")-1) != 0)
-		{
-			current_timeline->column = draw_state->data.sequence.num_columns;
-			pos += half_length + (current_timeline->name_length / 2) + 1;
-			draw_state->data.sequence.column[draw_state->data.sequence.num_columns] = pos;
-
-			half_length = (current_timeline->name_length / 2) + 1;
-
-			draw_state->data.sequence.num_columns++;
-
-			pos += current_timeline->group->max_message_length;
-		}
-		current_timeline = current_timeline->next;
-	}
-
-	draw_state->data.sequence.column[draw_state->data.sequence.num_columns] = pos;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : generate_sequence_diagram
- * Desc : This function output a sequence diagram.
- *        It requires a output function so that the same code can be used to output
- *        any format. The status for the output function should be passed in the
- *        status parameter.
- *--------------------------------------------------------------------------------*/
-unsigned int	generate_sequence_diagram( DRAW_STATE* draw_state, SEQUENCE_DIAGRAM* sequence_diagram)
-{
-	NODE	walk_start;
-	NODE*	search_node;
-	NODE*	active_node;
-	TIMELINE* current_timeline = sequence_diagram->timeline_list;
-
-	memset(&walk_start,0,sizeof(NODE));
-
-	/* first generate the column offsets for the sequence diagram */
-	generate_columns(sequence_diagram,draw_state);
-	
-	output_formats[draw_state->format].output_header(draw_state,sequence_diagram->group->name,sequence_diagram->group->name_length);
-	output_formats[draw_state->format].output_timelines(draw_state,sequence_diagram->timeline_list);
-
-	while (current_timeline != NULL)
-	{
-		if (current_timeline->node != NULL)
-		{
-			walk_start.next = current_timeline->node;
-
-			search_node = &walk_start;
-
-			do
-			{
-				search_node = search_next_node(search_node,&active_node);
-
-				if (active_node != NULL)
-				{
-					do
-					{
-						if (active_node->sent_message != NULL)
-						{
-							output_formats[draw_state->format].output_message(draw_state,active_node->sent_message);
-						}
-						active_node = next_active_node(active_node);
-					}
-					while (active_node != NULL && search_node != active_node);
-				}
-			}
-			while (search_node != NULL);
-		}
-
-		current_timeline = current_timeline->next;
-	}
-	
-	output_formats[draw_state->format].output_footer(draw_state);
-}
-
-/* TODO: remove the debug --- */
-#define NAME_WIDTH	(22)
-
-unsigned int	dump_sequence(SEQUENCE_DIAGRAM* sequence_diagram)
-{
-	NODE*		current_node;
-	MESSAGE*	current_message;
-	TIMELINE*	current_timeline;
-	unsigned int result = EC_OK;
-	unsigned char	to_name[NAME_WIDTH+1];
-	unsigned char	message_name[NAME_WIDTH+1];
-	unsigned char	from_name[NAME_WIDTH+1];
-	
-	to_name[NAME_WIDTH] = '\0';
-	from_name[NAME_WIDTH] = '\0';
-	message_name[NAME_WIDTH] = '\0';
-
-	printf("-----------------------------------------------------------------------------\n");
-	printf("----------------------------- DUMP SEQUENCE ---------------------------------\n");
-	printf("-----------------------------------------------------------------------------\n");
-
-	if (sequence_diagram != NULL)
-	{
-		current_timeline = sequence_diagram->timeline_list;
-
-		while (current_timeline != NULL)
-		{
-			current_node = current_timeline->node;
-
-			printf("timeline: %s\n",current_timeline->name);
-
-			while (current_node != NULL)
-			{
-				/* check the messages that have been sent from the current node */
-				current_message = current_node->sent_message;
-
-				memset(from_name,' ',NAME_WIDTH);
-				memset(to_name,' ',NAME_WIDTH);
-				memset(message_name,' ',NAME_WIDTH);
-
-				if (current_message != NULL)
-				{
-					if (current_message->sending_timeline != NULL)
-					{
-						memcpy(from_name,current_message->sending_timeline->name,current_message->sending_timeline->name_length);
-					}
-
-					memcpy(message_name,current_message->name,current_message->name_length);
-
-					if (current_message->target_timeline != NULL)
-					{
-						memcpy(to_name,current_message->target_timeline->name,current_message->target_timeline->name_length);
-					}
-
-					to_name[NAME_WIDTH] = '\0';
-					from_name[NAME_WIDTH] = '\0';
-					message_name[NAME_WIDTH] = '\0';
-					printf("s: %s ---> %p %s%p ---> %s (%p)\n",from_name,current_message->sender,message_name,current_message->receiver,to_name,current_message);
-				}
-
-				/* check for the messages that have been received. */
-				current_message = current_node->received_message;
-
-				memset(from_name,' ',NAME_WIDTH);
-				memset(to_name,' ',NAME_WIDTH);
-				memset(message_name,' ',NAME_WIDTH);
-
-				if (current_message != NULL)
-				{
-					if (current_message->sending_timeline != NULL)
-					{
-						memcpy(from_name,current_message->sending_timeline->name,current_message->sending_timeline->name_length);
-					}
-
-					memcpy(message_name,current_message->name,current_message->name_length);
-
-					if (current_message->receiver != NULL)
-					{
-						memcpy(to_name,current_message->target_timeline->name,current_message->target_timeline->name_length);
-					}
-					to_name[NAME_WIDTH] = '\0';
-					from_name[NAME_WIDTH] = '\0';
-					message_name[NAME_WIDTH] = '\0';
-
-					printf("r: %s <--- %p %s%p <--- %s (%p)\n",to_name,current_message->receiver,message_name,current_message->sender,from_name,current_message);
-				}
-				else if (current_node->wait_message.name_length > 0)
-				{
-					memcpy(from_name,current_node->wait_message.name,current_node->wait_message.name_length);
-					printf("w: %s (%p %p)\n",from_name,current_node,current_node->sent_message);
-				}
-
-				current_node = current_node->next;
-			}
-
-			current_timeline = current_timeline->next;
-		}
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : produce_output
- * Desc : This function will generate the output.
- *--------------------------------------------------------------------------------*/
-unsigned int	produce_output(char* output_directory, unsigned int name_length, unsigned int format)
-{
-	DRAW_STATE*			draw_state;
-	GROUP*				current = &g_group_tree;
-	unsigned int		result = EC_OK;
-
-	draw_state = calloc(1,sizeof(DRAW_STATE));
-
-	/* initialise the draw state */
-	draw_state->offset = 0;
-	draw_state->format = format;
-	draw_state->buffer = malloc(2048);
-	draw_state->buffer_size = 2048;
-	
-	while (current != NULL)
-	{
-		if (current->state_machine != NULL)
-		{
-			draw_state->type = DIAGRAM_TYPE_STATE_MACHINE;				/* TODO: debug */
-			if (output_open(draw_state,current->state_machine->group,output_directory,name_length))
-			{
-				generate_state_machine(draw_state,current->state_machine);
-				output_close(draw_state);
-			}
-		}
-
-		if (current->sequence_diagram != NULL)
-		{
-			draw_state->type = DIAGRAM_TYPE_SEQUENCE_DIAGRAM;			/* TODO: debug */
-			if (output_open(draw_state,current->state_machine->group,output_directory,name_length))
-			{
-				generate_sequence_diagram(draw_state,current->sequence_diagram);
-				output_close(draw_state);
-			}
-		}
-		current = current->next;
-	}
-
-	free(draw_state->buffer);
 
 	return result;
 }
@@ -2327,8 +1708,6 @@ unsigned int	find_wait(TIMELINE* search_timeline, TIMELINE* timeline, NODE** sen
 					current_node->next = temp_node;
 					current_node = temp_node;
 
-					printf("%p %p\n",current_node,current_node->received_message);
-
 					current_node->received_message = sent_message;
 					sent_message->target_timeline = target_timeline;
 					sent_message->receiver = current_node;
@@ -2385,7 +1764,6 @@ unsigned int	find_wait(TIMELINE* search_timeline, TIMELINE* timeline, NODE** sen
 
 	return result;
 }
-
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : connect_responses
@@ -2552,7 +1930,6 @@ unsigned int	connect_sequence(SEQUENCE_DIAGRAM* sequence_diagram)
 	return result;
 }
 
-
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : semantic_check
  * Desc : This function will check that the files input are sensible and all the
@@ -2610,7 +1987,523 @@ unsigned int semantic_check ( void )
 	return result;
 }
 
-static	unsigned char	output_name[] = {'o','u','t',PATH_SEPARATOR,'\0'};
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : open_file
+ * Desc : This function will open the output file and initialise the output
+ *        structure for the file.
+ *--------------------------------------------------------------------------------*/
+int	open_file(OUTPUT_FILE* file, char* file_name)
+{
+	int result = 0;
+
+	if ((file->outfile = open(file_name,WRITE_FILE_STATUS,WRITE_FILE_PERM)) != -1)
+	{
+		file->buffer = malloc(FILE_BLOCK_SIZE);
+		file->offset = 0;
+
+		result = 1;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_to_file
+ * Desc : This function will write the specific record to the file. It will handle
+ *        the block structure and padding.
+ *--------------------------------------------------------------------------------*/
+void	write_to_file(OUTPUT_FILE* file)
+{
+	if ((file->record_size + file->offset) > FILE_BLOCK_SIZE)
+	{
+		if (file->offset < FILE_BLOCK_SIZE)
+		{
+			file->buffer[file->offset++] = LINKER_BLOCK_END;
+		}
+
+		write(file->outfile,file->buffer,FILE_BLOCK_SIZE);
+		file->offset = 0;
+	}
+
+	/* Ok, copy the parts to the output */
+	memcpy(&file->buffer[file->offset],file->buffer_list[0].buffer,file->buffer_list[0].size);
+	file->offset += file->buffer_list[0].size;
+
+	if (file->parts > 1)
+	{
+		memcpy(&file->buffer[file->offset],file->buffer_list[1].buffer,file->buffer_list[1].size);
+		file->offset += file->buffer_list[1].size;
+	}
+
+	if (file->parts > 2)
+	{
+		memcpy(&file->buffer[file->offset],file->buffer_list[2].buffer,file->buffer_list[2].size);
+		file->offset += file->buffer_list[2].size;
+	}
+
+	if (file->parts > 3)
+	{
+		memcpy(&file->buffer[file->offset],file->buffer_list[3].buffer,file->buffer_list[3].size);
+		file->offset += file->buffer_list[3].size;
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : close_file
+ * Desc : This function will close the output file and flush the last write
+ *        block to the file.
+ *--------------------------------------------------------------------------------*/
+void	close_file(OUTPUT_FILE* file)
+{
+	if (file->offset > 0)
+	{
+		file->buffer[file->offset++] = LINKER_BLOCK_END;
+		write(file->outfile,file->buffer,FILE_BLOCK_SIZE);
+	}
+	
+	free(file->buffer);
+	file->buffer = NULL;
+
+	close(file->outfile);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_empty_record
+ * Desc : This function writes empty record to the file.
+ *--------------------------------------------------------------------------------*/
+void	write_empty_record(unsigned char type, OUTPUT_FILE* file)
+{
+	unsigned char	buffer[1];
+
+	buffer[0] = type;
+
+	file->parts = 1;
+	file->record_size = 1;
+	file->buffer_list[0].size = 1;
+	file->buffer_list[0].buffer = buffer;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_numerics_record
+ * Desc : This function writes a short and a int to the file.
+ *--------------------------------------------------------------------------------*/
+void	write_numerics_record(unsigned char type, OUTPUT_FILE* file, unsigned short param1, unsigned int param2)
+{
+	unsigned char	buffer[7];
+
+	buffer[0] = type;
+	buffer[1] = (param1 >> 8) & 0xff;
+	buffer[2] = param1 & 0xff;
+	
+	buffer[3] = (param2 & 0xff000000) >> 24;
+	buffer[4] = (param2 & 0x00ff0000) >> 16;
+	buffer[5] = (param2 & 0x0000ff00) >> 8;
+	buffer[6] = (param2 & 0xff);
+
+	file->parts = 1;
+	file->record_size = 7;
+	file->buffer_list[0].size = 7;
+	file->buffer_list[0].buffer = buffer;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_numeric_record
+ * Desc : This function writes a short to the file.
+ *--------------------------------------------------------------------------------*/
+void	write_numeric_record(unsigned char type, OUTPUT_FILE* file, unsigned short param)
+{
+	unsigned char	buffer[3];
+
+	buffer[0] = type;
+	buffer[1] = (param >> 8) & 0xff;
+	buffer[2] = param & 0xff;
+
+	file->parts = 1;
+	file->record_size = 3;
+	file->buffer_list[0].size = 3;
+	file->buffer_list[0].buffer = buffer;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_string_param_record
+ * Desc : This function writes a string record to the file. With a parameter.
+ *--------------------------------------------------------------------------------*/
+void	write_string_param_record(unsigned char type, OUTPUT_FILE* file,unsigned char* string,unsigned short string_length, unsigned short param)
+{
+	unsigned char	buffer[4];
+
+	buffer[0] = type;
+	buffer[1] = (param >> 8) & 0xff;
+	buffer[2] = param & 0xff;
+	buffer[3] = string_length & 0xff;
+
+	file->parts = 2;
+	file->record_size = 4 + string_length;
+	file->buffer_list[0].size = 4;
+	file->buffer_list[0].buffer = buffer;
+	file->buffer_list[1].size = string_length;
+	file->buffer_list[1].buffer = string;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_string_record
+ * Desc : This function writes a string record to the file.
+ *--------------------------------------------------------------------------------*/
+void	write_string_record(unsigned char type, OUTPUT_FILE* file, unsigned char* string, unsigned short string_length)
+{
+	unsigned char	buffer[2];
+
+	buffer[0] = type;
+	buffer[1] = string_length & 0xff;
+
+	file->parts = 2;
+	file->record_size = 2 + string_length;
+	file->buffer_list[0].size = 2;
+	file->buffer_list[0].buffer = buffer;
+	file->buffer_list[1].size = string_length;
+	file->buffer_list[1].buffer = string;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_group_id_record
+ * Desc : This function writes a group record with an id attached..
+ *--------------------------------------------------------------------------------*/
+void	write_group_id_record(	unsigned char	type, 
+								OUTPUT_FILE*	file, 
+								GROUP*			group, 
+								unsigned char*	string,
+								unsigned short	string_length,
+								unsigned short	id)
+{
+	unsigned char	buffer[5];
+
+	buffer[0] = type;
+	buffer[1] = (id >> 8) & 0xff;
+	buffer[2] = (id & 0xff);
+	buffer[3] = group->name_length & 0xff;
+	buffer[4] = string_length & 0xff;
+
+	file->parts = 4;
+	file->record_size = 4 + group->name_length + 1 + string_length;
+	file->buffer_list[0].size = 4;
+	file->buffer_list[0].buffer = buffer;
+	file->buffer_list[1].size = group->name_length;
+	file->buffer_list[1].buffer = group->name;
+	file->buffer_list[2].size = 1;
+	file->buffer_list[2].buffer = &buffer[4];
+	file->buffer_list[3].size = string_length;
+	file->buffer_list[3].buffer = string;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_group_record
+ * Desc : This function writes a group record.
+ *--------------------------------------------------------------------------------*/
+void	write_group_record(unsigned char type, OUTPUT_FILE* file, GROUP* group, unsigned char* string, unsigned short string_length)
+{
+	unsigned char	buffer[3];
+
+	buffer[0] = type;
+	buffer[1] = group->name_length & 0xff;
+	buffer[2] = string_length & 0xff;
+
+	file->parts = 4;
+	file->record_size = 2 + group->name_length + 1 + string_length;
+	file->buffer_list[0].size = 2;
+	file->buffer_list[0].buffer = buffer;
+	file->buffer_list[1].size = group->name_length;
+	file->buffer_list[1].buffer = group->name;
+	file->buffer_list[2].size = 1;
+	file->buffer_list[2].buffer = &buffer[2];
+	file->buffer_list[3].size = string_length;
+	file->buffer_list[3].buffer = string;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_message_record
+ * Desc : This function writes a message record.
+ *--------------------------------------------------------------------------------*/
+void	write_message_record(	unsigned char	type,
+								OUTPUT_FILE*	file,
+								NODE*			current_node,
+								NODE*			other_node,
+								TIMELINE*		other_timeline,
+								unsigned char*	message_name,
+								unsigned int	message_length)
+{
+	unsigned char	buffer[5];
+	unsigned short	other_id = 0;
+	unsigned short	current_id = 0;
+	unsigned short	timeline_length = sizeof("unknown")-1;
+	unsigned char*	timeline_name = (unsigned char*) "Unknown";
+
+	if (current_node != NULL)
+	{
+		current_id = current_node->level;
+	}
+
+	if (other_node != NULL)
+	{
+		other_id = other_node->level;
+	}
+
+	if (other_timeline != NULL)
+	{
+		timeline_name = other_timeline->name;
+		timeline_length = other_timeline->name_length;
+	}
+
+	buffer[0] = type;
+	buffer[1] = current_id & 0xff;
+	buffer[2] = other_id & 0xff;
+
+	buffer[3] = timeline_length & 0xff;
+	
+	buffer[4] = message_length & 0xff;
+
+	file->parts = 4;
+	file->record_size = 4 + timeline_length + 1 + message_length;
+	file->buffer_list[0].size = 4;
+	file->buffer_list[0].buffer = buffer;
+	file->buffer_list[1].size = timeline_length;
+	file->buffer_list[1].buffer = timeline_name;
+	file->buffer_list[2].size = 1;
+	file->buffer_list[2].buffer = &buffer[4];
+	file->buffer_list[3].size = message_length;
+	file->buffer_list[3].buffer = message_name;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : output_state_machine
+ * Desc : This function will output the state machine to the open file.
+ *--------------------------------------------------------------------------------*/
+void	output_state_machine(OUTPUT_FILE* outfile,STATE_MACHINE* state_machine)
+{
+	unsigned int		node_id = 0;
+	STATE*				current_state = state_machine->state_list;
+	TRIGGERS* 			current_triggers;
+	STATE_TRANSITION*	current_trans;
+	
+	/* enumerate all the states first first */
+	while (current_state != NULL)
+	{
+		current_state->tag_id = node_id++;
+
+		current_state = current_state->next;
+	}
+
+	current_state = state_machine->state_list;
+
+	write_string_record(LINKER_STATE_MACHINE_START,outfile,state_machine->group->name,state_machine->group->name_length);
+
+	while (current_state != NULL)
+	{
+		current_trans = current_state->transition_list;
+
+		if (current_state->name_length > 0)
+		{
+			write_group_id_record(LINKER_STATE,outfile,current_state->group,current_state->name,current_state->name_length,current_state->tag_id);
+
+			while(current_trans != NULL)
+			{
+				write_numeric_record(LINKER_TRANSITON,outfile,current_trans->next_state->tag_id);
+
+				if (current_trans->trigger != NULL)
+				{
+					write_group_record(	LINKER_TRIGGER,
+										outfile,
+										current_trans->trigger->group,
+										current_trans->trigger->name,
+										current_trans->trigger->name_length);
+				}
+				else if (current_trans->condition != NULL)
+				{
+					write_string_record(LINKER_CONDITION,outfile,current_trans->condition,current_trans->condition_length);
+				}
+
+				if (current_trans->triggers != NULL)
+				{
+					current_triggers = current_trans->triggers;
+
+					do
+					{
+						write_group_record(	LINKER_TRIGGERS,
+											outfile,
+											current_triggers->trigger->group,
+											current_triggers->trigger->name,
+											current_triggers->trigger->name_length);
+
+						current_triggers = current_triggers->next;
+					} 
+					while (current_triggers != NULL);
+				}
+
+				current_trans = current_trans->next;
+			}
+
+			/* end the state */
+			write_empty_record(LINKER_END,outfile);
+		}
+		current_state = current_state->next;
+	}
+
+	write_empty_record(LINKER_STATE_MACHINE_END,outfile);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : output_sequence_diagram
+ * Desc : This function will output the sequence diagram.
+ *--------------------------------------------------------------------------------*/
+void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_diagram)
+{
+	NODE*		current_node;
+	MESSAGE*	current_message;
+	TIMELINE*	current_timeline;
+	unsigned int	node_id = 1;
+	unsigned int 	result = EC_OK;
+
+	current_timeline = sequence_diagram->timeline_list;
+	
+	write_string_record(LINKER_SEQUENCE_START,outfile,sequence_diagram->group->name,sequence_diagram->group->name_length);
+
+	/* enumerate all the nodes first */
+	while (current_timeline != NULL)
+	{
+		current_node = current_timeline->node;
+
+		while (current_node != NULL)
+		{
+			current_node->level = node_id++;
+			current_node = current_node->next;
+		}
+
+		current_timeline = current_timeline->next;
+	}
+
+	/* now dump the nodes */
+	current_timeline = sequence_diagram->timeline_list;
+
+	while (current_timeline != NULL)
+	{
+		current_node = current_timeline->node;
+
+		write_group_record(LINKER_TIMELINE,outfile,current_timeline->group,current_timeline->name,current_timeline->name_length);
+
+		while (current_node != NULL)
+		{
+			/* start the node */
+			write_numerics_record(LINKER_NODE_START,outfile,current_node->level,current_node->flags);
+
+			/* check the messages that have been sent from the current node */
+			current_message = current_node->sent_message;
+
+			if (current_message != NULL)
+			{
+				write_message_record(	LINKER_SENT_MESSAGE,
+										outfile,
+										current_node,
+										current_message->receiver,
+										current_message->target_timeline,
+										current_message->name,
+										current_message->name_length);
+			}
+
+			if (current_node->received_message == NULL && current_node->wait_message.name_length > 0)
+			{
+				/* TODO: not sure if this is required to be output */
+				printf("w: %s (%p %p)\n",current_node->wait_message.name,(void*)current_node,(void*)current_node->sent_message);
+			}
+
+			write_empty_record(LINKER_NODE_END,outfile);
+
+			current_node = current_node->next;
+		}
+
+		current_timeline = current_timeline->next;
+	}
+
+	write_empty_record(LINKER_SEQUENCE_END,outfile);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : produce_output
+ * Desc : This function will output the resulting linked object file.
+ *--------------------------------------------------------------------------------*/
+unsigned int	produce_output(char* output_name)
+{
+	time_t			now = time(NULL);
+	struct tm*		curr_time = gmtime(&now);
+	unsigned int	in_size;
+	unsigned int	result = EC_OK;
+	unsigned char	signature[4] = LINKED_SOURCE_MAGIC;
+	unsigned char	file_header[FILE_HEADER_SIZE];
+	GROUP*			current = &g_group_tree;
+	OUTPUT_FILE		outfile;
+
+	if (open_file(&outfile,output_name))
+	{
+		/* ok, we have created the output file */
+		file_header[0] = signature[0];
+		file_header[1] = signature[1];
+		file_header[2] = signature[2];
+		file_header[3] = signature[3];
+
+		file_header[FILE_VERSION_MAJOR] = VERSION_MAJOR;
+		file_header[FILE_VERSION_MINOR] = VERSION_MINOR;
+
+		file_header[FILE_DAY_OFF    ] = (unsigned char) curr_time->tm_mday;
+		file_header[FILE_MONTH_OFF  ] = (unsigned char) curr_time->tm_mon;
+		file_header[FILE_YEAR_OFF   ] = (unsigned char) curr_time->tm_year;
+		file_header[FILE_HOUR_OFF   ] = (unsigned char) curr_time->tm_hour;
+		file_header[FILE_MINUTE_OFF ] = (unsigned char) curr_time->tm_min;
+		file_header[FILE_SECONDS_OFF] = (unsigned char) curr_time->tm_sec;
+
+		/* more than one imput file name so set this to zero */
+		file_header[FILE_NAME_LENGTH  ] = 0;
+		file_header[FILE_NAME_LENGTH+1] = 0;
+
+		write(outfile.outfile,file_header,FILE_HEADER_SIZE);
+
+		hex_dump(file_header,FILE_HEADER_SIZE);
+
+		/* ok, we have an open file */
+		while (current != NULL)
+		{
+			if (current->state_machine != NULL)
+			{
+				output_state_machine(&outfile,current->state_machine);
+			}
+
+			if (current->sequence_diagram != NULL)
+			{
+				output_sequence_diagram(&outfile,current->sequence_diagram);
+			}
+			current = current->next;
+		}
+
+		close_file(&outfile);
+	}
+
+	return result;
+}
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : main
@@ -2620,16 +2513,15 @@ int main(int argc, const char *argv[])
 	int				quiet = 0;
 	int				failed = 0;
 	int				verbose = 0;
+	char*			output_name = "doc.gdo";
 	char*			infile_name = NULL;
 	char*			error_param = "";
 	char*			error_string = "";
-	unsigned char	output_directory[FILENAME_MAX];
 	unsigned int	start = 1;
-	unsigned int	output_format = OUTPUT_TEXT;
 	unsigned int	output_length = 4;
 	unsigned char*	param_mask;
 
-	memcpy(output_directory,output_name,4);
+	memcpy(output_name,output_name,4);
 
 	param_mask = calloc(argc,1);
 
@@ -2662,13 +2554,15 @@ int main(int argc, const char *argv[])
 					case 'o':	/* output directory */
 						if (argv[start][2] != '\0')
 						{
-							output_length = strcpycnt(output_directory,&argv[start][2],FILENAME_MAX);
+							output_name = (char*) &argv[start][2];
+							param_mask[start] = 1;
 						}
 						else if (((start + 1) < argc) && argv[start+1][0] != '-')
 						{
+							param_mask[start] = 1;
 							start++;
 
-							output_length = strcpycnt(output_directory,argv[start],FILENAME_MAX);
+							output_name = (char*) argv[start];
 							param_mask[start] = 1;
 						}
 						else
@@ -2700,18 +2594,7 @@ int main(int argc, const char *argv[])
 	}
 	else
 	{
-		if (output_directory[output_length-2] != PATH_SEPARATOR)
-		{
-			if (output_length < FILENAME_MAX)
-			{
-				output_directory[output_length-1] = PATH_SEPARATOR;
-				output_directory[output_length] = '\0';
-			}
-			else
-			{
-				output_directory[output_length++] = PATH_SEPARATOR;
-			}
-		}
+		g_input_filename = NULL;
 
 		for (start = 1; start < argc; start++)
 		{
@@ -2723,13 +2606,13 @@ int main(int argc, const char *argv[])
 		}
 
 		/* change the filename that the error reports are going to be reported against */
-		g_input_filename = (unsigned char*) output_directory;
+		g_input_filename = (unsigned char*) output_name;
 
 		if (!failed)
 		{
 			if ((failed = semantic_check()) == EC_OK)
 			{
-				failed = produce_output(output_directory,output_length,output_format);
+				failed = produce_output(output_name);
 			}
 		}
 	}

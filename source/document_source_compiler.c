@@ -181,30 +181,40 @@ unsigned int	generate_output(ATOM_INDEX* atom_index, char* filename, char* input
 	int				outfile;
 	unsigned int	in_size;
 	unsigned int	result = 0;
+	unsigned char	signature[4] = COMPILED_SOURCE_MAGIC;
 	time_t			now = time(NULL);
 	struct tm*		curr_time = gmtime(&now);
-
+	unsigned char	file_header[FILE_HEADER_SIZE];
+	
 	if ((outfile = open(filename,WRITE_FILE_STATUS,WRITE_FILE_PERM)) != -1)
 	{
 		/* ok, we have created the output file */
-		g_file_header[INTERMEDIATE_DAY_OFF	  ] = (unsigned char) curr_time->tm_mday;
-		g_file_header[INTERMEDIATE_MONTH_OFF  ] = (unsigned char) curr_time->tm_mon;
-		g_file_header[INTERMEDIATE_YEAR_OFF	  ] = (unsigned char) curr_time->tm_year;
-		g_file_header[INTERMEDIATE_HOUR_OFF	  ] = (unsigned char) curr_time->tm_hour;
-		g_file_header[INTERMEDIATE_MINUTE_OFF ] = (unsigned char) curr_time->tm_min;
-		g_file_header[INTERMEDIATE_SECONDS_OFF] = (unsigned char) curr_time->tm_sec;
+		file_header[0] = signature[0];
+		file_header[1] = signature[1];
+		file_header[2] = signature[2];
+		file_header[3] = signature[3];
+		file_header[4] = VERSION_MAJOR;
+		file_header[5] = VERSION_MINOR;
+
+		/* time stamp the file */
+		file_header[FILE_DAY_OFF	  ] = (unsigned char) curr_time->tm_mday;
+		file_header[FILE_MONTH_OFF	  ] = (unsigned char) curr_time->tm_mon;
+		file_header[FILE_YEAR_OFF	  ] = (unsigned char) curr_time->tm_year;
+		file_header[FILE_HOUR_OFF	  ] = (unsigned char) curr_time->tm_hour;
+		file_header[FILE_MINUTE_OFF   ] = (unsigned char) curr_time->tm_min;
+		file_header[FILE_SECONDS_OFF  ] = (unsigned char) curr_time->tm_sec;
 
 		/* put the number of records in the header */
 		in_size = g_group_lookup.num_items + atom_index->number_atoms;
-		g_file_header[INTERMEDIATE_NUMBER_RECORDS_OFF+0] = (unsigned char)((in_size & 0xff00) >>8);
-		g_file_header[INTERMEDIATE_NUMBER_RECORDS_OFF+1] = (unsigned char)(in_size & 0xff);
+		file_header[FILE_NUMBER_RECORDS+0] = (unsigned char)((in_size & 0xff00) >>8);
+		file_header[FILE_NUMBER_RECORDS+1] = (unsigned char)(in_size & 0xff);
 
 		/* put the size of the input name in the header */
 		in_size = strlen(input_name);
-		g_file_header[INTERMEDIATE_NAME_START_OFF+0] = (unsigned char)((in_size & 0xff00) >>8);
-		g_file_header[INTERMEDIATE_NAME_START_OFF+1] = (unsigned char)(in_size & 0xff);
+		file_header[FILE_NAME_START+0] = (unsigned char)((in_size & 0xff00) >>8);
+		file_header[FILE_NAME_START+1] = (unsigned char)(in_size & 0xff);
 
-		write(outfile,g_file_header,INTERMEDIATE_HEADER_SIZE);
+		write(outfile,file_header,FILE_HEADER_SIZE);
 		write(outfile,input_name,in_size);
 
 		/* dump the groups first */

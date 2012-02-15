@@ -66,6 +66,12 @@ contrived names.
 This function will produce the final mark-up for the document. It will take a list of files. I will spit
 out a marked up function.
 
+2.1.3 Peter's Document Proccesor (pdp)
+
+This umtility will take in the linked document from the pdl and proccess it with the other .md documents
+to produce the final doc for output. This is what produces the final document. This is the function handles
+the markup (Markdown).
+
 3. Operation Rational
 
 The use of a compiler and a linker basically has the following reasons:

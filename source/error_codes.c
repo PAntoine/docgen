@@ -68,7 +68,8 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"Undefined function reference: ",
 	"@send without a receiving @waitfor.",
 	"@respond without a @send",
-	"message being sent to an ancestor in the message chain. Loops are not allowed."
+	"message being sent to an ancestor in the message chain. Loops are not allowed.",
+	"input file signature incorrect."
 };
 	
 /*----- FUNCTION -----------------------------------------------------------------*

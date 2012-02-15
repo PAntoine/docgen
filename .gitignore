@@ -23,6 +23,7 @@ R.java
 *.pdso
 *.png
 *.dot
+pdp
 pdsl
 pdsc
 object

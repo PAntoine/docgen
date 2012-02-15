@@ -28,21 +28,35 @@
 #define MAX_NAME_LENGTH		(255)
 #define MAX_OUTPUT_COLUMNS	(255)
 
-/*--------------------------------------------------------------------------------*
- * file format
- *--------------------------------------------------------------------------------*/
-#define INTERMEDIATE_VERSION_MAJOR_OFF	(4)
-#define INTERMEDIATE_VERSION_MINOR_OFF	(5)
-#define INTERMEDIATE_DAY_OFF			(6)
-#define INTERMEDIATE_MONTH_OFF			(7)
-#define INTERMEDIATE_YEAR_OFF			(8)
-#define INTERMEDIATE_HOUR_OFF			(9)
-#define INTERMEDIATE_MINUTE_OFF			(10)
-#define INTERMEDIATE_SECONDS_OFF		(11)
-#define INTERMEDIATE_NUMBER_RECORDS_OFF	(12)
-#define INTERMEDIATE_NAME_START_OFF		(16)
-#define INTERMEDIATE_HEADER_SIZE		(18)
+#define MAX_RECORD_SIZE		(USHRT_MAX)
+#define MAX_GROUPS_PER_FILE	(0x7fff)
 
+#define FILE_BLOCK_SIZE		(8 * 1024)
+
+/*--------------------------------------------------------------------------------*
+ * File header format
+ *--------------------------------------------------------------------------------*/
+#define COMPILED_SOURCE_MAGIC	{0x47,0x44,0x53,0x43}
+#define LINKED_SOURCE_MAGIC		{0x47,0x44,0x53,0x4c}
+
+#define FILE_MAGIC			(0)
+#define FILE_VERSION_MAJOR	(4)
+#define FILE_VERSION_MINOR	(5)
+#define FILE_DATE			(6)
+#define FILE_DAY_OFF		(6)
+#define FILE_MONTH_OFF		(7)
+#define FILE_YEAR_OFF		(8)
+#define FILE_HOUR_OFF		(9)
+#define FILE_MINUTE_OFF		(10)
+#define FILE_SECONDS_OFF	(11)
+#define FILE_NUMBER_RECORDS	(12)
+#define FILE_NAME_LENGTH	(14)
+#define FILE_NAME_START		(16)
+#define FILE_HEADER_SIZE	(18)
+
+/*--------------------------------------------------------------------------------*
+ * general file format
+ *--------------------------------------------------------------------------------*/
 /* record types */
 #define INTERMEDIATE_RECORD_GROUP		(0)
 #define INTERMEDIATE_RECORD_FUNCTION	(1)
@@ -61,8 +75,74 @@
 
 #define RECORD_FUNCTION_MASK	(0x8000)
 
-#define MAX_RECORD_SIZE		(USHRT_MAX)
-#define MAX_GROUPS_PER_FILE	(0x7fff)
+/*--------------------------------------------------------------------------------*
+ * linker file format
+ *--------------------------------------------------------------------------------*/
+#define LINKER_VERSION_MAJOR_OFF	(4)
+#define LINKER_VERSION_MINOR_OFF	(5)
+#define LINKER_DAY_OFF				(6)
+#define LINKER_MONTH_OFF			(7)
+#define LINKER_YEAR_OFF				(8)
+#define LINKER_HOUR_OFF				(9)
+#define LINKER_MINUTE_OFF			(10)
+#define LINKER_SECONDS_OFF			(11)
+#define LINKER_NUMBER_RECORDS_OFF	(12)
+#define LINKER_NAME_START_OFF		(16)
+#define LINKER_HEADER_SIZE			(18)
+
+/* record layout */
+#define LINKER_RECORD_TYPE			(0)
+#define LINKER_RECORD_SIZE			(1)
+#define LINKER_RECORD_DATA_START	(3)
+
+#define LINKER_MAX_RECORD_SIZE		(512)
+
+/* record defintions:
+ *  all data items are size,bytes for strings. BYTE = 1 byte, SHORT = 2 bytes, and
+ *  LONG = 4 bytes.
+ *
+ *	linker_end					= {}
+ *  linker_trigger				= {string:name}
+ *  linker_triggers				= {string:name}
+ *	linker_condition			= {string:name}
+ *	linker_function				= {string:name}
+ *	linker_source_file			= {string:name}
+ *	linker_source_ref			= {short:file_number,long:line_number}
+ *	linker_group				= {string:name}
+ *	linker_state_machine_start	= {string:name}
+ *	linker_state				= {string:name}
+ *	linker_transistion			= {short:group_id,short:to_state,string:name,short:trigger,<trigger_id>,short:num_triggers,<trigger_id>}
+ *	linker_sequence_start		= {}
+ *	linker_timeline				= {string:name}
+ *	linker_message				= {string:message,short:to_node,byte:num_parameters}
+ *	linker_parameter			= {string:name,byte:type,string:value}
+ *	linker_node_start			= {}
+ *	linker_sent_message			= {short:message_id,short:to_node}
+ *	linker_recieved_message		= {short:message_id,short:from_node}
+ */
+
+#define LINKER_TRIGGER				( 0)	/* defines a trigger */
+#define LINKER_TRIGGERS				( 1)	/* define a triggers */
+#define LINKER_CONDITION			( 2)	/* defines a condition */
+#define LINKER_SOURCE_FILE			( 3)	/* defines a source file reference */
+#define LINKER_SOURCE_REFERENCE		( 4)	/* defines a source line reference */
+#define	LINKER_END					( 5)	/* the end of a list of items */
+#define LINKER_BLOCK_END			( 6)	/* the end of a block - NULL record */
+
+#define LINKER_GROUP				( 6)	/* defines A group name */
+#define LINKER_STATE_MACHINE_START	( 8)	/* defines the start of a state machine */
+#define LINKER_STATE				( 9)	/* the start of a state list */
+#define LINKER_TRANSITON			(10)	/* defines a transition between two states */
+#define LINKER_STATE_MACHINE_END	(11)	/* denotes the end of a state machine */
+#define LINKER_SEQUENCE_START		(12)	/* denotes the start of a sequence diagram */
+#define	LINKER_TIMELINE				(13)	/* defines a timeline */
+#define LINKER_FUNCTION				(14)	/* a function name definition */
+#define LINKER_MESSAGE				(15)	/* defines a message */
+#define LINKER_PARAMETER			(16)	/* denotes the start of a sequence diagram */
+#define LINKER_NODE_START			(17)	/* node start */
+#define LINKER_SENT_MESSAGE			(18)	/* references a message that is being send from this node */
+#define LINKER_NODE_END				(19)	/* node start */
+#define LINKER_SEQUENCE_END			(20)	/* denotes the end of a sequence diagram */
 
 /*--------------------------------------------------------------------------------*
  * The Group lookup list structures.
@@ -204,10 +284,10 @@ typedef struct tag_block_name
 
 typedef struct tag_trigger
 {
-	unsigned int		flags;				/* the status flags for the item */
+	unsigned int		flags;					/* the status flags for the item */
 	unsigned int		name_length;
-	unsigned char		name[MAX_NAME_LENGTH];			/* the name of the trigger */
-	GROUP*				group;				/* the group that the trigger belongs to */
+	unsigned char		name[MAX_NAME_LENGTH];	/* the name of the trigger */
+	GROUP*				group;					/* the group that the trigger belongs to */
 
 	struct tag_trigger*	next;
 
@@ -395,6 +475,63 @@ typedef struct
 	BLOCK_NAME			condition;				/* if this is a state then the condition for the transition */
 	BLOCK_NAME			transition;				/* if this is a state then transition */
 } BLOCK_NODE;
+
+typedef struct
+{
+	unsigned char	size;
+	unsigned char*	buffer;
+
+} RECORD_BITS;
+
+typedef struct
+{
+	int				outfile;
+	unsigned int	parts;
+	unsigned int	offset;
+	unsigned int	record_size;
+	unsigned char*	buffer;
+	RECORD_BITS		buffer_list[4];
+
+} OUTPUT_FILE;
+
+/*--------------------------------------------------------------------------------*
+ * Document processor defines and structures.
+ *--------------------------------------------------------------------------------*/
+#define	MODEL_LOAD_UNKNOWN	(0)
+#define	MODEL_LOAD_STATE	(1)
+#define	MODEL_LOAD_SEQUENCE	(2)
+
+/* loading list */
+typedef struct
+{
+	unsigned char*	name;
+	unsigned int	name_length;
+} NAME;
+
+typedef struct tag_name_list
+{
+	unsigned char*	name;
+	unsigned int	name_length;
+
+	struct tag_name_list* next;
+} NAME_LIST;
+
+typedef struct
+{
+	unsigned int	to_tag;
+	NAME			name;
+	NAME			condition;
+	NAME			trigger;
+	NAME_LIST		triggers;
+} LOAD_TRANSITION;
+
+typedef struct
+{
+	unsigned int	sender;
+	unsigned int	receiver;
+	NAME			timeline;
+	NAME			message_name;
+} LOAD_MESSAGE;
 
 /*--------------------------------------------------------------------------------*
  * Cross-Platform defines.
