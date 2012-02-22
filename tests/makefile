@@ -22,10 +22,10 @@ DOC_COMPILE_FLAGS = -DSTATE_ONE=test_one
 all: object docs
 
 docs: ../pdp object/test.gout
-	@$(DEBUG_FUNC) ../pdp -iobject/test.gout
+	@$(DEBUG_FUNC) ../pdp -iobject/test.gout source/test_file.md
 
 object/test.gout: $(OBJECT_FILES) ../pdsl
-	$(DEBUG_FUNC) ../pdsl $(OBJECT_FILES) -o object/test.gout
+	@$(DEBUG_FUNC) ../pdsl $(OBJECT_FILES) -o object/test.gout
 
 object/%.pdso : source/%.c ../pdsc
 	@$(DEBUG_FUNC) ../pdsc -o $@ $< $(DOC_COMPILE_FLAGS)
@@ -34,4 +34,5 @@ object:
 	@$(MKDIR) object 
 
 clean:
+	@$(RM_F) output
 	@$(RM_F) object

@@ -25,27 +25,216 @@
 
 extern OUTPUT_FORMATS	output_formats[];
 
+
+/*--------------------------------------------------------------------------------*
+ * static constant strings
+ *--------------------------------------------------------------------------------*/
+static unsigned char	string_none[] = "";
+static unsigned char	string_state_machine[] = "state_machine";
+static unsigned char	string_sequence_diagram[] = "sequence_diagram";
+static unsigned char*	type_string[] = {string_none,string_state_machine,string_sequence_diagram};
+static unsigned int		type_length[] = {0,sizeof(string_state_machine)-1,sizeof(string_sequence_diagram)-1};
+
+unsigned char is_valid_char[] = 
+{
+	0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
+	0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x01,
+	0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
+	0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+};
+
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : tag_all_states
+ * Desc : This function will untag all states in the state_machine.
+ *--------------------------------------------------------------------------------*/
+static void	tag_all_states(STATE_MACHINE* state_machine)
+{
+	STATE*	current_state = state_machine->state_list;
+
+	while (current_state != NULL)
+	{
+		current_state->flags |= (FLAG_TAGGED | FLAG_ACTIVE);
+
+		current_state = current_state->next;
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : untag_all_states
+ * Desc : This function will untag all states in the state_machine.
+ *--------------------------------------------------------------------------------*/
+static void	untag_all_states(STATE_MACHINE* state_machine)
+{
+	STATE*	current_state = state_machine->state_list;
+
+	while (current_state != NULL)
+	{
+		current_state->flags &= ~(FLAG_TAGGED | FLAG_ACTIVE);
+
+		current_state = current_state->next;
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : tag_state
+ * Desc : This function will tag the state and all the states that communicate
+ *        with it. The main state is tagged as active and the other states are
+ *        tagged as tagged so the generator knows which states it has to output.
+ *--------------------------------------------------------------------------------*/
+static void	tag_state(STATE* state)
+{
+	STATE_TRANSITION*	current_transition = state->transition_list;
+
+	state->flags |= (FLAG_ACTIVE | FLAG_TAGGED);
+
+	while(current_transition != NULL)
+	{
+		if (current_transition->next_state != NULL)
+		{
+			current_transition->next_state->flags |= FLAG_TAGGED;
+		}
+
+		current_transition = current_transition->next;
+	}
+}
+
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : generate_state_machine
  * Desc : This function will produce a dot file for the given state machine.
  *--------------------------------------------------------------------------------*/
-static void	generate_state_machine(DRAW_STATE* draw_state, STATE_MACHINE* state_machine)
+static void	generate_state_machine(DRAW_STATE* draw_state, INPUT_STATE* input_state, GROUP* tree)
 {
 	STATE*				current_state;
+	GROUP*				group;
+	STATE_TRANSITION*	current_trans;
 
-	output_formats[draw_state->format].output_header(draw_state,state_machine->group->name,state_machine->group->name_length);
-	output_formats[draw_state->format].output_states(draw_state,state_machine->state_list);
-	
-	current_state = state_machine->state_list;
-
-	while (current_state != NULL)
+	if ((group = find_group(tree,input_state->group_name,input_state->group_length)) == NULL)
 	{
-		output_formats[draw_state->format].output_state(draw_state,current_state);
-
-		current_state = current_state->next;
+		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
+	else if (input_state->item_length > 0 && (current_state = find_state(group,input_state->item_name,input_state->item_length)) == NULL)
+	{
+		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+	}
+	else
+	{
+		if (current_state == NULL)
+		{
+			tag_all_states(group->state_machine);
+		}
+		else
+		{
+			untag_all_states(group->state_machine);
+			tag_state(current_state);
+		}
 
-	output_formats[draw_state->format].output_footer(draw_state);
+		/* now generate the output */
+		current_state = group->state_machine->state_list;
+		
+		output_formats[draw_state->format].output_header(draw_state,group->name,group->name_length);
+		output_formats[draw_state->format].output_states(draw_state,current_state);
+
+		while (current_state != NULL)
+		{
+			if ((current_state->flags & FLAG_TAGGED) == FLAG_TAGGED)
+			{
+				/* we have a state that we want to output */
+				output_formats[draw_state->format].output_start_state(draw_state,current_state);
+
+				current_trans = current_state->transition_list;
+
+				while(current_trans != NULL)
+				{
+					/* is this transition one that we are interested in? */
+					if (((current_state->flags & FLAG_ACTIVE) == FLAG_ACTIVE) || ((current_trans->next_state->flags & FLAG_ACTIVE) == FLAG_ACTIVE))
+					{
+						output_formats[draw_state->format].output_transition(draw_state,current_state,current_trans);
+					}
+
+					current_trans = current_trans->next;
+				}
+
+				output_formats[draw_state->format].output_end_state(draw_state,current_state);
+			}
+
+			current_state = current_state->next;
+		}
+
+		output_formats[draw_state->format].output_footer(draw_state);
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : tag_all_timelines
+ * Desc : This function simply untags all the timelines.
+ *--------------------------------------------------------------------------------*/
+static void	tag_all_timelines(SEQUENCE_DIAGRAM* sequence_diagram)
+{
+	TIMELINE*	current_timeline = sequence_diagram->timeline_list;
+
+	while (current_timeline != NULL)
+	{
+		current_timeline->flags |= (FLAG_TAGGED | FLAG_ACTIVE);
+
+		current_timeline = current_timeline->next;
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : untag_timelines
+ * Desc : This function simply untags all the timelines.
+ *--------------------------------------------------------------------------------*/
+static void	untag_timelines(SEQUENCE_DIAGRAM* sequence_diagram)
+{
+	TIMELINE*	current_timeline = sequence_diagram->timeline_list;
+
+	while (current_timeline != NULL)
+	{
+		current_timeline->flags &= ~(FLAG_TAGGED|FLAG_ACTIVE);
+
+		current_timeline = current_timeline->next;
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : tag_timelines
+ * Desc : This function will walk down the given timeline and tag the timelines
+ *        that it sends or receives messages to/from. It does not clear down the
+ *        timelines that it does not talk to.
+ *--------------------------------------------------------------------------------*/
+static void	tag_timelines(TIMELINE* source)
+{
+	NODE*	current_node = source->node;
+
+	source->flags |= (FLAG_TAGGED | FLAG_ACTIVE);
+
+	while (current_node != NULL)
+	{
+		if (current_node->sent_message != NULL && current_node->sent_message->target_timeline != NULL)
+		{
+			current_node->sent_message->target_timeline->flags |= FLAG_TAGGED;
+		}
+		else if (current_node->received_message != NULL && current_node->received_message->sending_timeline != NULL)
+		{
+			current_node->received_message->sending_timeline->flags |= FLAG_TAGGED;
+		}
+
+		current_node = current_node->next;
+	}
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -59,13 +248,11 @@ static void	generate_columns(SEQUENCE_DIAGRAM* sequence_diagram, DRAW_STATE* dra
 	unsigned short	half_length = 0;
 	TIMELINE*		current_timeline = sequence_diagram->timeline_list;
 
-	unsigned char	debug[2048];
-
 	draw_state->data.sequence.num_columns = 0;
 
 	while (current_timeline != NULL)
 	{
-		if (memcmp("broadcast",current_timeline->name,sizeof("broadcast")-1) != 0)
+		if ((current_timeline->flags & FLAG_TAGGED) == FLAG_TAGGED)
 		{
 			current_timeline->column = draw_state->data.sequence.num_columns;
 			pos += half_length + (current_timeline->name_length / 2) + 1;
@@ -74,7 +261,7 @@ static void	generate_columns(SEQUENCE_DIAGRAM* sequence_diagram, DRAW_STATE* dra
 			half_length = (current_timeline->name_length / 2) + 1;
 
 			draw_state->data.sequence.num_columns++;
-
+			
 			pos += current_timeline->group->max_message_length;
 		}
 		current_timeline = current_timeline->next;
@@ -82,6 +269,7 @@ static void	generate_columns(SEQUENCE_DIAGRAM* sequence_diagram, DRAW_STATE* dra
 
 	draw_state->data.sequence.column[draw_state->data.sequence.num_columns] = pos;
 }
+
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : generate_sequence_diagram
  * Desc : This function output a sequence diagram.
@@ -89,108 +277,91 @@ static void	generate_columns(SEQUENCE_DIAGRAM* sequence_diagram, DRAW_STATE* dra
  *        any format. The status for the output function should be passed in the
  *        status parameter.
  *--------------------------------------------------------------------------------*/
-static unsigned int	generate_sequence_diagram( DRAW_STATE* draw_state, SEQUENCE_DIAGRAM* sequence_diagram)
+static unsigned int	generate_sequence_diagram( DRAW_STATE* draw_state, INPUT_STATE* input_state, GROUP* tree)
 {
-	NODE	walk_start;
-	NODE*	search_node;
-	NODE*	active_node;
-	TIMELINE* current_timeline = sequence_diagram->timeline_list;
+	NODE		walk_start;
+	NODE*		search_node;
+	NODE*		active_node;
+	GROUP*		group;
+	TIMELINE*	current_timeline = NULL;
 
-	memset(&walk_start,0,sizeof(NODE));
-
-	/* first generate the column offsets for the sequence diagram */
-	generate_columns(sequence_diagram,draw_state);
-	
-	output_formats[draw_state->format].output_header(draw_state,sequence_diagram->group->name,sequence_diagram->group->name_length);
-	output_formats[draw_state->format].output_timelines(draw_state,sequence_diagram->timeline_list);
-
-	while (current_timeline != NULL)
+	if ((group = find_group(tree,input_state->group_name,input_state->group_length)) == NULL)
 	{
-		if (current_timeline->node != NULL)
+		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+	}
+	else if (input_state->item_length > 0 && (current_timeline = find_timeline(group,input_state->item_name,input_state->item_length)) == NULL)
+	{
+		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+	}
+	else
+	{
+		if (current_timeline == NULL)
 		{
-			walk_start.next = current_timeline->node;
+			tag_all_timelines(group->sequence_diagram);
+		}
+		else
+		{
+			untag_timelines(group->sequence_diagram);
+			tag_timelines(current_timeline);
+		}
 
-			search_node = &walk_start;
+		memset(&walk_start,0,sizeof(NODE));
 
-			do
+		/* first generate the column offsets for the sequence diagram */
+		generate_columns(group->sequence_diagram,draw_state);
+		
+		current_timeline = group->sequence_diagram->timeline_list;
+
+		output_formats[draw_state->format].output_header(draw_state,group->name,group->name_length);
+		output_formats[draw_state->format].output_timelines(draw_state,current_timeline);
+
+		if (draw_state->data.sequence.num_columns > 0)
+		{
+			while (current_timeline != NULL)
 			{
-				search_node = search_next_node(search_node,&active_node);
-
-				if (active_node != NULL)
+				if (current_timeline->node != NULL && ((current_timeline->flags & FLAG_TAGGED) == FLAG_TAGGED))
 				{
+					walk_start.next = current_timeline->node;
+
+					search_node = &walk_start;
+
 					do
 					{
-						if (active_node->sent_message != NULL)
+						search_node = search_next_node(search_node,&active_node);
+
+						if (active_node != NULL)
 						{
-							output_formats[draw_state->format].output_message(draw_state,active_node->sent_message);
+							do
+							{
+								if (active_node->sent_message != NULL)
+								{
+									if (active_node->sent_message->receiver != NULL &&
+											(((active_node->sent_message->sender->timeline->flags & FLAG_ACTIVE) == FLAG_ACTIVE) ||
+											 ((active_node->sent_message->receiver->timeline->flags & FLAG_ACTIVE) == FLAG_ACTIVE))) 
+									{
+										output_formats[draw_state->format].output_message(draw_state,active_node->sent_message);
+									}
+								}
+								active_node = next_active_node(active_node);
+							}
+							while (active_node != NULL && search_node != active_node);
 						}
-						active_node = next_active_node(active_node);
 					}
-					while (active_node != NULL && search_node != active_node);
+					while (search_node != NULL);
 				}
+				current_timeline = current_timeline->next;
 			}
-			while (search_node != NULL);
 		}
 
-		current_timeline = current_timeline->next;
+		output_formats[draw_state->format].output_footer(draw_state);
 	}
-	
-	output_formats[draw_state->format].output_footer(draw_state);
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : produce_output
- * Desc : This function will generate the output.
- *--------------------------------------------------------------------------------*/
-unsigned int	produce_output(GROUP* group_tree, unsigned char* output_directory, unsigned int name_length, unsigned int format)
-{
-	DRAW_STATE*			draw_state;
-	GROUP*				current = group_tree;
-	unsigned int		result = EC_OK;
-
-	draw_state = calloc(1,sizeof(DRAW_STATE));
-
-	/* initialise the draw state */
-	draw_state->offset = 0;
-	draw_state->format = format;
-	draw_state->buffer = malloc(2048);
-	draw_state->buffer_size = 2048;
-	
-	while (current != NULL)
-	{
-		if (current->state_machine != NULL)
-		{
-			draw_state->type = DIAGRAM_TYPE_STATE_MACHINE;
-			
-			if (output_open(draw_state,current->state_machine->group,output_directory,name_length))
-			{
-				generate_state_machine(draw_state,current->state_machine);
-				output_close(draw_state);
-			}
-		}
-
-		if (current->sequence_diagram != NULL)
-		{
-			draw_state->type = DIAGRAM_TYPE_SEQUENCE_DIAGRAM;
-			
-			if (output_open(draw_state,current->state_machine->group,output_directory,name_length))
-			{
-				generate_sequence_diagram(draw_state,current->sequence_diagram);
-				output_close(draw_state);
-			}
-		}
-		current = current->next;
-	}
-	free(draw_state->buffer);
-
-	return result;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : read_numeric_record
  * Desc : This function will read a string record.
  *--------------------------------------------------------------------------------*/
-unsigned int	read_numeric_record(unsigned int offset, unsigned char* buffer, unsigned short *parameter)
+static unsigned int	read_numeric_record(unsigned int offset, unsigned char* buffer, unsigned short *parameter)
 {
 	*parameter = (((unsigned short)buffer[offset + 1]) << 8) | buffer[offset+2];
 
@@ -201,7 +372,7 @@ unsigned int	read_numeric_record(unsigned int offset, unsigned char* buffer, uns
  * Name : read_numerics_record
  * Desc : This function will read a string record.
  *--------------------------------------------------------------------------------*/
-unsigned int	read_numerics_record(unsigned int offset, unsigned char* buffer, unsigned short *parameter1, unsigned int *parameter2)
+static unsigned int	read_numerics_record(unsigned int offset, unsigned char* buffer, unsigned short *parameter1, unsigned int *parameter2)
 {
 	*parameter1 = (((unsigned short)buffer[offset + 1]) << 8) | buffer[offset+2];
 	*parameter2 = (((	((unsigned int)buffer[offset + 3]) << 24) | 
@@ -216,7 +387,7 @@ unsigned int	read_numerics_record(unsigned int offset, unsigned char* buffer, un
  * Name : read_string_record
  * Desc : This function will read a string record.
  *--------------------------------------------------------------------------------*/
-unsigned int	read_string_record(unsigned int offset, unsigned char* buffer, NAME* name)
+static unsigned int	read_string_record(unsigned int offset, unsigned char* buffer, NAME* name)
 {
 	name->name_length = buffer[offset+1];
 	name->name = &buffer[offset+2];
@@ -228,10 +399,10 @@ unsigned int	read_string_record(unsigned int offset, unsigned char* buffer, NAME
  * Name : read_group_record
  * Desc : This function reads a group record.
  *--------------------------------------------------------------------------------*/
-unsigned int	read_group_record(	unsigned int	offset, 
-									unsigned char*	buffer, 
-									NAME*			group,
-									NAME*			name)
+static unsigned int	read_group_record(	unsigned int	offset, 
+										unsigned char*	buffer, 
+										NAME*			group,
+										NAME*			name)
 {
 	unsigned char	length = buffer[offset+1];
 
@@ -250,11 +421,11 @@ unsigned int	read_group_record(	unsigned int	offset,
  * Name : read_group_id_record
  * Desc : This function reads a group record and an id.
  *--------------------------------------------------------------------------------*/
-unsigned int	read_group_id_record(	unsigned int	offset, 
-										unsigned char*	buffer, 
-										NAME*			group,
-										NAME*			name,
-										unsigned short*	id)
+static unsigned int	read_group_id_record(	unsigned int	offset, 
+											unsigned char*	buffer, 
+											NAME*			group,
+											NAME*			name,
+											unsigned short*	id)
 {
 	unsigned char	length = buffer[offset+3];
 
@@ -275,12 +446,12 @@ unsigned int	read_group_id_record(	unsigned int	offset,
  * Name : read_message_record
  * Desc : This function writes a group record.
  *--------------------------------------------------------------------------------*/
-unsigned int	read_message_record(	unsigned int	offset, 
-										unsigned char*	buffer,
-										unsigned char*	sender_id,
-										unsigned char*	receiver_id,
-										NAME*			receiver_timeline, 
-										NAME*			message)
+static unsigned int	read_message_record(	unsigned int	offset, 
+											unsigned char*	buffer,
+											unsigned char*	sender_id,
+											unsigned char*	receiver_id,
+											NAME*			receiver_timeline, 
+											NAME*			message)
 {
 	/* get the id's */
 	*sender_id = buffer[offset+1];
@@ -304,7 +475,7 @@ unsigned int	read_message_record(	unsigned int	offset,
  *        check wont work. But, as we assume there will be less than 2^16 states
  *        we can use that check to post validate the states and transitions later.
  *--------------------------------------------------------------------------------*/
-STATE_TRANSITION*	add_transition(STATE* state, unsigned short to_id)
+static STATE_TRANSITION*	add_transition(STATE* state, unsigned short to_id)
 {
 	STATE_TRANSITION*	temp;
 	STATE_TRANSITION*	new_transition = NULL;
@@ -327,7 +498,7 @@ STATE_TRANSITION*	add_transition(STATE* state, unsigned short to_id)
  * Name : add_trigger
  * Desc : This function will add a trigger to a transition.
  *--------------------------------------------------------------------------------*/
-void	add_trigger(STATE_TRANSITION* transition,GROUP* group, NAME* trigger_name)
+static	void	add_trigger(STATE_TRANSITION* transition,GROUP* group, NAME* trigger_name)
 {
 	transition->trigger = calloc(1,sizeof(TRIGGER));
 	transition->trigger->group = group;
@@ -340,7 +511,7 @@ void	add_trigger(STATE_TRANSITION* transition,GROUP* group, NAME* trigger_name)
  * Desc : This function will add a trigger to list of triggers that are generated
  *        by this node.
  *--------------------------------------------------------------------------------*/
-void	add_triggers(STATE_TRANSITION* transition,GROUP* group, NAME* trigger_name)
+static void	add_triggers(STATE_TRANSITION* transition,GROUP* group, NAME* trigger_name)
 {
 	TRIGGERS*	new_triggers;
 
@@ -367,7 +538,7 @@ void	add_triggers(STATE_TRANSITION* transition,GROUP* group, NAME* trigger_name)
  * Name : add_message
  * Desc : This function will add a message to the given timeline.
  *--------------------------------------------------------------------------------*/
-void	add_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
+static void	add_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
 {
 	MESSAGE* new_message = calloc(1,sizeof(MESSAGE));
 
@@ -388,7 +559,7 @@ void	add_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
  * Name : add_node
  * Desc : This function will add a node to the timeline.
  *--------------------------------------------------------------------------------*/
-NODE*	add_node(TIMELINE* timeline, unsigned short id, unsigned int flags)
+static NODE*	add_node(TIMELINE* timeline, unsigned short id, unsigned int flags)
 {
 	NODE* result = calloc(1,sizeof(NODE));
 
@@ -414,7 +585,7 @@ NODE*	add_node(TIMELINE* timeline, unsigned short id, unsigned int flags)
  * Name : create_message
  * Desc : This function will create a message.
  *--------------------------------------------------------------------------------*/
-MESSAGE*	create_message(unsigned short sender_id, unsigned short receiver_id, NAME* message_name)
+static MESSAGE*	create_message(unsigned short sender_id, unsigned short receiver_id, NAME* message_name)
 {
 	MESSAGE* result = calloc(1,sizeof(MESSAGE));
 
@@ -430,7 +601,7 @@ MESSAGE*	create_message(unsigned short sender_id, unsigned short receiver_id, NA
  * Name : input_model
  * Desc : This function will input the model.
  *--------------------------------------------------------------------------------*/
-unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned short *max_state, unsigned short* max_node)
+static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned short *max_state, unsigned short* max_node)
 {
 	int					infile;
 	unsigned int		state = MODEL_LOAD_UNKNOWN;
@@ -674,9 +845,9 @@ unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned short *max
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : connect_model
  * Desc : This function will connect the loaded model. It will attach all the
- *        messages and state taransitions to the target state/nodes.
+ *        messages and state transitions to the target state/nodes.
  *--------------------------------------------------------------------------------*/
-unsigned int	connect_model(GROUP* group_tree, unsigned short max_state, unsigned short max_node)
+static unsigned int	connect_model(GROUP* group_tree, unsigned short max_state, unsigned short max_node)
 {
 	unsigned int		result = EC_OK;
 	unsigned short		count;
@@ -777,6 +948,7 @@ unsigned int	connect_model(GROUP* group_tree, unsigned short max_state, unsigned
 						if (node_jump[((unsigned int)current_node->sent_message->receiver)])
 						{
 							node_jump[((unsigned int)current_node->sent_message->receiver)]->received_message = current_node->sent_message;
+							current_node->sent_message->target_timeline = node_jump[((unsigned int)current_node->sent_message->receiver)]->timeline;
 						}
 						current_node->sent_message->receiver = node_jump[((unsigned int)current_node->sent_message->receiver)];
 					}
@@ -797,6 +969,263 @@ unsigned int	connect_model(GROUP* group_tree, unsigned short max_state, unsigned
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : parse_input
+ * Desc : This function will parse the input and locate the markers that we are
+ *        interested in.
+ *--------------------------------------------------------------------------------*/
+unsigned int	parse_input(INPUT_STATE* input_state)
+{
+	unsigned int 			result = 1;
+	unsigned int			keep_looking = 1;
+	static unsigned char	model_name[] = "model:";
+	static unsigned int		model_length = sizeof(model_name) - 1;
+
+	/* default state - dump the data into the output */
+	input_state->state = TYPE_TEXT;
+	input_state->output_end = input_state->buffer_pos;
+	input_state->output_start = input_state->buffer_pos;
+
+	if (input_state->buffer_pos >= input_state->bytes_read)
+	{
+		result = 0;
+	}
+	else
+	{
+		while (keep_looking && input_state->buffer_pos < input_state->bytes_read)
+		{
+			switch(input_state->internal_state)
+			{
+				case INPUT_STATE_INTERNAL_SEARCHING:
+					while(input_state->buffer_pos < input_state->bytes_read)
+					{
+						if (input_state->buffer[input_state->buffer_pos++] == '[')
+						{
+							input_state->model_pos = 0;
+							input_state->internal_state = INPUT_STATE_INTERNAL_SCHEME;
+							break;
+						}
+					}
+
+					input_state->output_end = input_state->buffer_pos;
+					break;
+
+				case INPUT_STATE_INTERNAL_SCHEME:
+					if (input_state->buffer[input_state->buffer_pos++] != model_name[input_state->model_pos++])
+					{
+						input_state->internal_state = INPUT_STATE_INTERNAL_SEARCHING;
+					}
+
+					if (input_state->model_pos == model_length)
+					{
+						/* next time around handle do this */
+						input_state->internal_state = INPUT_STATE_INTERNAL_GROUP_COLLECT;
+						input_state->item_length = 0;
+						input_state->group_length = 0;
+
+						/* remove the '[' from the output and exit and write the output */
+						input_state->output_end--;
+						keep_looking = 0;
+					}
+					break;
+
+				case INPUT_STATE_INTERNAL_GROUP_COLLECT:
+					if (is_valid_char[input_state->buffer[input_state->buffer_pos]])
+					{
+						input_state->group_name[input_state->group_length++] = input_state->buffer[input_state->buffer_pos];
+					}
+					else if (input_state->buffer[input_state->buffer_pos] == '/')
+					{
+						/* leading '/' are ignored but ones in the middle are separators */
+						if (input_state->group_length > 0)
+						{
+							input_state->internal_state = INPUT_STATE_INTERNAL_TYPE_COLLECT;
+							input_state->count = 0;
+						}
+					}
+					else if (input_state->buffer[input_state->buffer_pos] == ']')
+					{
+						/* ok, we have finished looking at the name */
+						input_state->internal_state = INPUT_STATE_INTERNAL_SEARCHING;
+						input_state->output_end = input_state->buffer_pos;
+						input_state->output_start = input_state->buffer_pos;
+						keep_looking = 0;
+					}
+					else
+					{
+						input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+					}
+					
+					input_state->buffer_pos++;
+					break;
+
+				case INPUT_STATE_INTERNAL_TYPE_COLLECT:
+					
+					if (input_state->count == 0)
+					{
+						if (input_state->buffer[input_state->buffer_pos] != 's')
+						{
+							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+						}
+						else
+						{
+							input_state->count++;
+						}
+					}
+					else if (input_state->count == 1)
+					{
+						if (input_state->buffer[input_state->buffer_pos] == 't')
+						{
+							input_state->temp_type = TYPE_STATE_MACHINE;
+						}
+						else if (input_state->buffer[input_state->buffer_pos] == 'e')
+						{
+							input_state->temp_type = TYPE_SEQUENCE_DIAGRAM;
+						}
+						else
+						{
+							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+						}
+
+						input_state->count++;
+					}
+					else if (type_string[input_state->temp_type][input_state->count] == input_state->buffer[input_state->buffer_pos])
+					{
+						input_state->count++;
+					}
+					else if (type_length[input_state->temp_type] == input_state->count)
+					{
+						if (input_state->buffer[input_state->buffer_pos] == '/')
+						{
+							input_state->internal_state = INPUT_STATE_INTERNAL_ITEM_COLLECT;
+							input_state->item_length = 0;
+						}
+						else if (input_state->buffer[input_state->buffer_pos] == ']')
+						{
+							input_state->state = input_state->temp_type;
+							input_state->internal_state = INPUT_STATE_INTERNAL_SEARCHING;
+							input_state->output_end = input_state->buffer_pos+1;
+							input_state->output_start = input_state->buffer_pos+1;
+							keep_looking = 0;
+						}
+						else
+						{
+							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+						}
+					}
+					else
+					{
+						input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+					}
+					
+					input_state->buffer_pos++;
+					break;
+
+				case INPUT_STATE_INTERNAL_ITEM_COLLECT:
+					if (is_valid_char[input_state->buffer[input_state->buffer_pos]])
+					{
+						input_state->item_name[input_state->item_length++] = input_state->buffer[input_state->buffer_pos];
+					}
+					else if (input_state->buffer[input_state->buffer_pos] == '/')
+					{
+						input_state->state = TYPE_TEXT;
+						input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+					}
+					else if (input_state->buffer[input_state->buffer_pos] == ']')
+					{
+						/* ok, we have finished looking at the name */
+						input_state->state = input_state->temp_type;
+						input_state->internal_state = INPUT_STATE_INTERNAL_SEARCHING;
+						input_state->output_end = input_state->buffer_pos+1;
+						input_state->output_start = input_state->buffer_pos+1;
+						keep_looking = 0;
+					}
+					else
+					{
+						input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+					}
+					
+					input_state->buffer_pos++;
+					break;
+
+				case INPUT_STATE_INTERNAL_DUMP_TILL_END:
+					if (input_state->buffer[input_state->buffer_pos++] == ']')
+					{
+						/* ok, we have finished looking at the name */
+						input_state->state = TYPE_TEXT;
+						input_state->internal_state = INPUT_STATE_INTERNAL_SEARCHING;
+						input_state->output_end = input_state->buffer_pos;
+						input_state->output_start = input_state->buffer_pos;
+					}
+					break;
+			}
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : process_input
+ * Desc : This function will process the given input file and produce the genrated
+ *        documents for the system.
+ *--------------------------------------------------------------------------------*/
+unsigned int	process_input(GROUP* group_tree, const char* file_name,const char* output_directory,unsigned int output_length)
+{
+	unsigned int	result = EC_OK;
+	DRAW_STATE		draw_state;
+	INPUT_STATE		input_state;
+
+	input_state.input_name = (unsigned char*) file_name;
+
+	if ((input_state.input_file = open(file_name,READ_FILE_STATUS)) == -1)
+	{
+		result = EC_PROBLEM_WITH_INPUT_FILE;
+		raise_warning(0,result,(unsigned char*)file_name,NULL);
+	}
+	else
+	{
+		if ((result = output_open(&draw_state,(char*)file_name,(unsigned char*)output_directory,output_length)) == EC_OK)
+		{
+			while ((input_state.bytes_read = read(input_state.input_file,input_state.buffer,FILE_BLOCK_SIZE)) > 0)
+			{
+				input_state.buffer_pos = 0;
+
+				/* now check the read in data for the markers that we are interested in */
+				while(parse_input(&input_state))
+				{
+					/* action the found markers */
+					switch (input_state.state)
+					{
+						case TYPE_TEXT:
+							output_formats[draw_state.format].output_raw(	&draw_state,
+																			&input_state.buffer[input_state.output_start],
+																			input_state.output_end - input_state.output_start);
+							break;
+
+						case TYPE_STATE_MACHINE:
+							generate_state_machine(&draw_state,&input_state,group_tree);
+							break;
+
+						case TYPE_SEQUENCE_DIAGRAM:
+							generate_sequence_diagram(&draw_state,&input_state,group_tree);
+							break;
+
+						default:
+							raise_warning(0,EC_INTERNAL_ERROR_INPUT_BAD_STATE,(unsigned char*)file_name,0);
+					}
+				}
+			}
+
+			output_close(&draw_state);
+		}
+
+		close(input_state.input_file);
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : main
  *--------------------------------------------------------------------------------*/
 int main(int argc, const char *argv[])
@@ -805,19 +1234,18 @@ int main(int argc, const char *argv[])
 	int				failed = 0;
 	int				verbose = 0;
 	char*			input_name = NULL;
-	char*			output_name = "doc.gdo";
+	char*			output_name = "output";
 	char*			error_param = "";
 	char*			error_string = "";
 	unsigned int	result = EC_OK;
 	unsigned int	start = 1;
-	unsigned int	output_length = 4;
+	unsigned int	output_length = 6;
 	unsigned short	max_node;
 	unsigned short	max_state;
 	unsigned char*	param_mask;
 	GROUP			group_tree;
 
 	memset(&group_tree,0,sizeof(GROUP));
-	memcpy(output_name,output_name,4);
 
 	param_mask = calloc(argc,1);
 
@@ -917,8 +1345,19 @@ int main(int argc, const char *argv[])
 			/* connect the model */
 			if ((result = connect_model(&group_tree,max_state,max_node)) == EC_OK)
 			{
-				/* now load and process the input files */
-				produce_output(&group_tree,(unsigned char*)"out_test",sizeof("out_test")-1, OUTPUT_TEXT);
+				GROUP* temp = find_group(&group_tree,(unsigned char*)"",0);
+				
+				/* name the default group "default" */
+				memcpy(temp->name,"default",7);
+				temp->name_length = 7;
+
+				for (start=1; start < argc; start++)
+				{
+					if (param_mask[start] == 0)
+					{
+						result = process_input(&group_tree,argv[start],output_name,output_length);
+					}
+				}
 			}
 		}
 	}

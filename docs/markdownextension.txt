@@ -111,3 +111,26 @@ group.state_machine:
 group.state_machine:
 	state	input	-> output	=> next_state
 
+The format for the fixup of the diagrams to the docs should be:
+
+[diag_type: outout_name/type/diag_type/sub_type]
+
+If the subtype is specified then a partial graph will be output.
+In the case of sequence diagrams this should be a single timeline, or for state machines a single state.
+
+In these cases the diagram should only output the timeline or states that the state talks to. But not
+anything that that state generates to anything else.
+
+so:
+
+  [timeline1] [timeline2] [timeline3]
+		|<---a-----|            |
+		|----b---->|            |
+		|          |-----c----->|
+
+This would be drawn from a 6 timeline diagram but we are only requesting timeline_2 and it only sends
+one message and gets one response. It should show all the messages that the timeline gets and receives.
+
+For the state machine it's event easier as it only has to show the state in question and then the messages
+that go from and to that time line.
+

@@ -14,8 +14,8 @@
  *--------------------------------------------------------------------------------*/
 
 #include <string.h>
+#include "error_codes.h"
 #include "supported_formats.h"
-
 
 /*--------------------------------------------------------------------------------*
  * static strings
@@ -38,7 +38,9 @@ static unsigned int		state_machine_diagram_len = sizeof(state_machine_diagram_na
 
 OUTPUT_FORMATS	output_formats[] = 
 {
-	{text_fmt,TEXT_LEN,text_open,text_close,text_output_header,text_output_footer,text_output_timelines,text_output_message,text_output_states,text_output_state},
+	{text_fmt,	TEXT_LEN,	text_open,text_close,text_output_header,text_output_footer,text_output_raw,
+							text_output_timelines,text_output_message,
+							text_output_states,	text_output_start_state,text_output_transition,text_output_end_state},
 #if 0
 	{ "dot",dot_output_header,dot_output_footer,dot_output_timelines,dot_output_message,dot_output_states,dot_output_transition}
 #endif
@@ -90,45 +92,74 @@ unsigned int	extend_path(unsigned char* path_name, unsigned int* path_length, un
 	return result;
 }
 
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : get_filename
+ * Desc : This function will return the filename part of the path. It will remove
+ *        the extension from the filename and only return the filename and the
+ *        length of the filename.
+ *--------------------------------------------------------------------------------*/
+void	get_filename(unsigned char* path, unsigned char** file_name, unsigned int* file_name_length)
+{
+	unsigned int pos = 0;
+	unsigned int start = 0;
+	unsigned int length = 0;
+	unsigned int last_dot = UINT_MAX;
+
+	while (path[pos] != '\0')
+	{
+		if (path[pos] == PATH_SEPARATOR)
+		{
+ 			if (path[pos+1] != '\0')
+				start = pos+1;
+		}
+		else if (path[pos] == '.')
+		{
+			last_dot = pos;
+		}
+		pos++;
+	}
+
+	if (last_dot == UINT_MAX)
+	{
+		length = pos - start;
+	}
+	else
+	{
+		length = last_dot - start;
+	}
+
+	*file_name = &path[start];
+	*file_name_length = length;
+}
+
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : output_open
  * Desc : This function will open the output and set up any handles that are
  *        required for the output format.
  *
- *        All output will be created in a directory of named hierarchy. 
- *        	format/<group_name>/<item_type>/<object_name>
- *
- *        The directories up to <item_type> will be created if they do not exist.
- *        The final name is passed to the specific format type to create the final
- *        object, in whatever format that needs.
+ *        All files will be created in a directory structure in path. The structure
+ *        below that it up to the file format to structure the format.
  *
  *        The code relies on the fact that the file type will not change between
  *        the open and the close as it will build the directory path for the 
  *        target files to be placed in. If the type is changed mid run then the
  *        system will behave inconsistently.
  *--------------------------------------------------------------------------------*/
-unsigned int	output_open(DRAW_STATE* draw_state, GROUP* group, unsigned char* path, unsigned int path_length)
+unsigned int	output_open(DRAW_STATE* draw_state, char* input_file_name, unsigned char* path, unsigned int path_length)
 {
 	unsigned int	failed = 0;
-	unsigned int	result = 0;
+	unsigned int	result = EC_FAILED;
 	unsigned int	name_length;
-	unsigned int	group_name_length;
-	unsigned char*	group_name;
+	unsigned int	file_name_length;
+	unsigned char*	file_name;
 
-	if (group->name_length == 0)
-	{
-		group_name = (unsigned char*)"default";
-		group_name_length = sizeof("default")-1;
-	}
-	else
-	{
-		group_name = group->name;
-		group_name_length = group->name_length;
-	}
+	get_filename((unsigned char*)input_file_name,&file_name,&file_name_length);
 
 	if (draw_state->format < OUTPUT_FORMATS_MAX)
 	{
 		draw_state->path_length = 0;
+
 		/* add the route path */
 		if (extend_path(draw_state->path,&draw_state->path_length,path,path_length))
 		{
@@ -137,13 +168,8 @@ unsigned int	output_open(DRAW_STATE* draw_state, GROUP* group, unsigned char* pa
 							output_formats[draw_state->format].format_name,
 							output_formats[draw_state->format].format_name_length))
 			{
-				if (extend_path(draw_state->path,&draw_state->path_length,group_name,group_name_length))
-				{
-					/* ok, let the file draw_state->format open the file/dir that it requires */
-					result = output_formats[draw_state->format].output_open(draw_state,
-																			diagram_type[draw_state->type].name,
-																			diagram_type[draw_state->type].name_length);
-				}
+				/* ok, let the file draw_state->format open the file/dir that it requires */
+				result = output_formats[draw_state->format].output_open(draw_state,file_name,file_name_length);
 			}
 		}
 	}

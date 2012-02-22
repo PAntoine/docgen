@@ -121,6 +121,10 @@ Also, the system will allow for macros $(macro_name) to replace all or part of t
 mostly to allow for group type names to be tailored by the build. This will allow for the same file
 to be used by several build and be part of different system or sub systems.
 
+To reduce the amount cruft that the editor has to add to the source files, the @file atom block can
+be defined at the top of the source file. This block defines the global groups for the all the atom groups.
+You also can define the sub-groups i.e. the timeline name.
+
 4.2 Structure
 
 All the graphs/diagrams are defined by nodes. All nodes need to have a type and a name. Also depending
@@ -162,18 +166,24 @@ The group atoms do not override or interfere with the atom_group as this is used
 of the graphs and is used to sub-divide the graphs. The GROUP names should not have an atom_group as this
 would remove the point of them as logical grouping on the diagrams and not as structural atoms.
 
+4.3.6 STRUCTURE
+These atoms are for aiding the structure of the documentation. They are there for helping the compiler 
+organise the state of the atoms.
+
 4.3 Source data files format
 
 The extra files should be based on Mark-Down and any output produced by the system can be referenced by
-using the Markdown URI escape <...> with the URI of pdiag://<atom_name>, i,e,
+using the Markdown reference escape [...] with the URI of model:/<atom_name>, i,e,
 
-<pdiag://group_name.state_machine>
-<pdiag://group_name.timeline>
+[model:/group_name/state_machine]
+<model:/group_name/timeline]
 
 the default diagrams can be references via:
 
-<pdiag://state_machine>
-<pdiag://timeline>
+[model:/<group_name>/state_machine]
+[model:/<group_name>/timeline]
+
+To allow for markup to be able to set references then [<some text>](atom name) will allow for inline text.
 
 which will cause the main state machine diagram to be inserted at that point in the diagram. All items that
 have been produced by the system can be referenced more than once.
@@ -181,8 +191,8 @@ have been produced by the system can be referenced more than once.
 Also, to access sub files, as this makes it possible to create books/web-pages then the following URI will
 be used pdoc://<file_name> and the builder will handle the creation of the reference links.
 
-All docs that are included are built as separate blobs and then referenced. If thev final target is to be
-a single object then that will be done by the render.
+All docs that are included are built as separate blobs and then referenced. If the final target is to be
+a single object then that will be done by the renderer.
 
 NOTE: it is intended for the system to be extended to handle other data styles and tables and these will
 be added as there own URLs.
@@ -219,7 +229,7 @@ Sequence diagrams are described in the following way:
 This diagram has no triggers or conditions for the state transitions that can be specified for each of the
 transitions.
 
-4.4.1.1 Definitions of the allowed atoms
+4.4.1.2 Definitions of the allowed atoms
 
 @state: {state_name}
  This defines the name of the state. It is also the type atom.
@@ -250,7 +260,7 @@ transitions.
 @triggers:
 This sends the trigger for the @trigger to receive. It can send a trigger across state machines or sequence diagrams.
 
-4.4.1.2 Validity of States
+4.4.1.3 Validity of States
  - All states must have the following atoms: @state and @next.
  - The state pointed to by @next must exist and be defined within the same group.
  - If a state has a @trigger the @triggers atom must be called at least once. (does not need to be within the group).
@@ -336,15 +346,42 @@ These are the currently supported messages and conditionals supported.
  This is a message that is sent to all timelines. Each instance of a broadcast can only
  be matched once per timeline.
 
-4.4.2.2 Validity Of Sequences
- 4.4.2.2.1 All Sequences must have either @call or @send.
- 4.4.2.2.2 All Sequences must have a @to or @responds.
- 4.4.2.2.3 Only one @waitfor atom can be specified per node.
- 4.4.2.2.4 If @condition is specified the @trigger can not be. (and vis versa).
- 4.4.2.2.5 If @trigger is specified then one @triggers must be specified (does not have to be within a sequence diagram).
- 4.4.2.2.6 The message pointed to by @responds must have been sent to the current timeline.
- 4.4.2.2.7 The @after clause can be specified on a message or an activation, from the same timeline.
- 4.4.2.2.8 All messages must what a corresponding @waitsfor.
+4.4.2.3 Validity Of Sequences
+ 4.4.2.3.1 All Sequences must have either @call or @send.
+ 4.4.2.3.2 All Sequences must have a @to or @responds.
+ 4.4.2.3.3 Only one @waitfor atom can be specified per node.
+ 4.4.2.3.4 If @condition is specified the @trigger can not be. (and vis versa).
+ 4.4.2.3.5 If @trigger is specified then one @triggers must be specified (does not have to be within a sequence diagram).
+ 4.4.2.3.6 The message pointed to by @responds must have been sent to the current timeline.
+ 4.4.2.3.7 The @after clause can be specified on a message or an activation, from the same timeline.
+ 4.4.2.3.8 All messages must what a corresponding @waitsfor.
+
+4.4.3 Global file format atoms
+
+4.4.3.1 Structure file header format
+
+There is no structure for this.
+
+4.4.3.2 Valid atoms for the file state.
+
+@file:
+This defines the atom group that defines the defaults for the file. Any atom that is found in this group will
+be the defaults for the file.
+
+@author:
+This atom defines the author of the file.
+
+@group:
+This atom MUST only exist in the @file atom. It defines the default group for the all the atom groups in the file.
+It means that all other defined groups will default to this group.
+
+@timeline:
+This atom when in the file group will define the default timeline for all other sequence diagram atoms.
+
+4.4.3.3 Validity of File formats
+
+All states that are listed in 4.4.3.3 are valid and can be given in the @file atom block. They can only be one
+given once and should be at the top of the source file.
 
 4.5 Intermediate object file format.
 
@@ -473,11 +510,6 @@ The timelines are fixed up in the order of the first timeline to the last found 
 nodes are fixed starting with the first node found. Each timeline has control while it is in a sequence. I.e.
 when a node the has a dependency or is the last in the chain of dependencies is being processed. Functions
 members are also dependencies.
-
-The following algorithm should be followed:
-
-<TODO: re-write the algorithm >
-
 
 4.7 Final Output
 

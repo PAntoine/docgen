@@ -243,8 +243,8 @@ typedef struct tag_atom_list
 #define	FLAG_DEPENDENCY			(0x2000)	/* the item has a node that is depend on it */
 #define	FLAG_WAIT				(0x1000)	/* a wait has been claimed on this item */
 #define	FLAG_IN_FUNCTION		(0x0800)	/* the item is in a function */
-#define	FLAG_PROCESSED_TOGGLE	(0x0400)	/* this is a toggle bit for marking messages processed */
-#define	FLAG_ACTIVE				(0x0200)	/* if the message is actively being processed this flag is set */
+#define	FLAG_TAGGED				(0x0400)	/* this is a toggle bit for marking items as interesting */
+#define	FLAG_ACTIVE				(0x0200)	/* this is the active item of interest */
 #define	FLAG_FUNCTION			(0x0100)	/* this message is a function */
 #define	FLAG_FUNCTION_END		(0x0080)	/* this message is the end of a function */
 #define	FLAG_BROADCAST			(0x0040)	/* this message is a broadcast */
@@ -497,9 +497,21 @@ typedef struct
 /*--------------------------------------------------------------------------------*
  * Document processor defines and structures.
  *--------------------------------------------------------------------------------*/
-#define	MODEL_LOAD_UNKNOWN	(0)
-#define	MODEL_LOAD_STATE	(1)
-#define	MODEL_LOAD_SEQUENCE	(2)
+#define	MODEL_LOAD_UNKNOWN					(0)
+#define	MODEL_LOAD_STATE					(1)
+#define	MODEL_LOAD_SEQUENCE					(2)
+
+#define TYPE_TEXT							(0)
+#define TYPE_STATE_MACHINE					(1)
+#define TYPE_SEQUENCE_DIAGRAM				(2)
+
+#define	INPUT_STATE_INTERNAL_SEARCHING		(0)
+#define	INPUT_STATE_INTERNAL_SCHEME			(1)
+#define	INPUT_STATE_INTERNAL_GROUP_COLLECT	(2)
+#define	INPUT_STATE_INTERNAL_TYPE_COLLECT	(3)
+#define	INPUT_STATE_INTERNAL_ITEM_COLLECT	(4)
+#define	INPUT_STATE_INTERNAL_DUMP_TILL_END	(5)
+
 
 /* loading list */
 typedef struct
@@ -532,6 +544,27 @@ typedef struct
 	NAME			timeline;
 	NAME			message_name;
 } LOAD_MESSAGE;
+
+typedef struct
+{
+	int				input_file;
+	unsigned int	state;
+	unsigned int	temp_type;
+	unsigned int	count;
+	unsigned int	internal_state;
+	unsigned int	buffer_pos;
+	unsigned int	bytes_read;
+	unsigned int	output_start;
+	unsigned int	output_end;
+	unsigned int	model_pos;
+	unsigned int	item_length;
+	unsigned int	group_length;
+	unsigned char*	input_name;
+	unsigned char	buffer[FILE_BLOCK_SIZE];
+	unsigned char	item_name[MAX_NAME_LENGTH];
+	unsigned char	group_name[MAX_NAME_LENGTH];
+
+} INPUT_STATE;
 
 /*--------------------------------------------------------------------------------*
  * Cross-Platform defines.

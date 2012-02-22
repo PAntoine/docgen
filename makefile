@@ -41,7 +41,7 @@ all: exes tests
 exes: pdsc pdsl
 
 pdsc : object $(OBJECT_FILES) source/document_source_compiler.c
-	@$(CC) $(CFLAGS) source/document_source_compiler.c -o pdsc $(OBJECT_FILES) -I include
+	@$(CC) $(CFLAGS) source/document_source_compiler.c -o pdsc $(OBJECT_FILES) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
 
 pdsl : object $(OBJECT_FILES) source/document_linker.c
 	@$(CC) $(CFLAGS) source/document_linker.c -o pdsl $(OBJECT_FILES) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
@@ -65,7 +65,7 @@ clean:
 	@$(RM) source/atoms.c
 	@$(RM) include/atoms.h
 	@$(RM) object/*
-	$(MAKE) -C tests clean
+	@$(MAKE) -C tests clean
 	@$(RM) pdsc
 	@$(RM) pdsl
 

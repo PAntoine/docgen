@@ -69,7 +69,9 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"@send without a receiving @waitfor.",
 	"@respond without a @send",
 	"message being sent to an ancestor in the message chain. Loops are not allowed.",
-	"input file signature incorrect."
+	"input file signature incorrect.",
+	"INTERNAL ERROR: input found unknown state",
+	"Unknown item requested"
 };
 	
 /*----- FUNCTION -----------------------------------------------------------------*

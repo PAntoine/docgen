@@ -57,12 +57,15 @@ typedef unsigned int	(*OUTPUT_OPEN_FUNCTION)			(DRAW_STATE* draw_state, unsigned
 typedef void			(*OUTPUT_CLOSE_FUNCTION)		(DRAW_STATE* draw_state);
 typedef void			(*OUTPUT_HEADER_FUNCTION)		(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length);
 typedef void			(*OUTPUT_FOOTER_FUNCTION)		(DRAW_STATE* draw_state);
+typedef void			(*OUTPUT_RAW_FUNCTION)			(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buffer_size);
 
 typedef void			(*OUTPUT_TIMELINES_FUNCTION)	(DRAW_STATE* draw_state, TIMELINE* timeline);
 typedef void			(*OUTPUT_MESSAGE_FUNCTION)		(DRAW_STATE* draw_state, MESSAGE* message);
 
 typedef void			(*OUTPUT_STATES_FUNCTION)		(DRAW_STATE* draw_state, STATE* list);
-typedef void			(*OUTPUT_STATE_FUNCTION)		(DRAW_STATE* draw_state, STATE* state);
+typedef void			(*OUTPUT_END_STATE_FUNCTION)	(DRAW_STATE* draw_state,STATE* state);
+typedef void			(*OUTPUT_TRANSITION_FUNCTION)	(DRAW_STATE* draw_state,STATE* state, STATE_TRANSITION* transition);
+typedef void			(*OUTPUT_START_STATE_FUNCITON)	(DRAW_STATE* draw_state,STATE* state);
 
 typedef struct
 {
@@ -74,6 +77,7 @@ typedef struct
 	OUTPUT_CLOSE_FUNCTION		output_close;
 	OUTPUT_HEADER_FUNCTION		output_header;	
 	OUTPUT_FOOTER_FUNCTION		output_footer;
+	OUTPUT_RAW_FUNCTION			output_raw;
 
 	/* sequence diagram functions */
 	OUTPUT_TIMELINES_FUNCTION	output_timelines;
@@ -81,7 +85,9 @@ typedef struct
 
 	/* state machine functions */
 	OUTPUT_STATES_FUNCTION		output_states;
-	OUTPUT_STATE_FUNCTION		output_state;
+	OUTPUT_START_STATE_FUNCITON	output_start_state;
+	OUTPUT_TRANSITION_FUNCTION	output_transition;
+	OUTPUT_END_STATE_FUNCTION 	output_end_state;
 
 } OUTPUT_FORMATS;
 
@@ -117,7 +123,7 @@ struct tag_draw_state
 /*--------------------------------------------------------------------------------*
  * Function prototypes for the global functions
  *--------------------------------------------------------------------------------*/
-unsigned int	output_open(DRAW_STATE* draw_state, GROUP* group, unsigned char* path, unsigned int path_length);
+unsigned int	output_open(DRAW_STATE* draw_state, char* file_name, unsigned char* path, unsigned int path_length);
 void			output_close(DRAW_STATE* draw_state);
 
 /*--------------------------------------------------------------------------------*
@@ -127,10 +133,13 @@ unsigned int	text_open(DRAW_STATE* draw_state, unsigned char* name, unsigned int
 void			text_close(DRAW_STATE* draw_state);
 void			text_output_header(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length);
 void			text_output_footer(DRAW_STATE* draw_state);
+void			text_output_raw(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buffer_size);
 void			text_output_message(DRAW_STATE* draw_state, MESSAGE* message);
 void			text_output_timelines(DRAW_STATE* draw_state, TIMELINE* timeline);
 void			text_output_states(DRAW_STATE* draw_state, STATE* list);
-void			text_output_state(DRAW_STATE* draw_state, STATE* state);
+void			text_output_start_state(DRAW_STATE* draw_state,STATE* state);
+void			text_output_transition(DRAW_STATE* draw_state,STATE* state, STATE_TRANSITION* transition);
+void			text_output_end_state(DRAW_STATE* draw_state,STATE* state);
 
 /*--------------------------------------------------------------------------------*
  * DOT format function types

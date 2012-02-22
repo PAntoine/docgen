@@ -1883,6 +1883,11 @@ unsigned int	connect_sequence(SEQUENCE_DIAGRAM* sequence_diagram)
 	{
 		broadcast = find_timeline(sequence_diagram->group,(unsigned char*)"broadcast",sizeof("broadcast")-1);
 
+		if (broadcast != NULL)
+		{
+			broadcast->flags |= FLAG_BROADCAST;
+		}
+
 		current_timeline = sequence_diagram->timeline_list;
 		
 		while (current_timeline != NULL)
@@ -2403,38 +2408,41 @@ void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_di
 
 	while (current_timeline != NULL)
 	{
-		current_node = current_timeline->node;
-
-		write_group_record(LINKER_TIMELINE,outfile,current_timeline->group,current_timeline->name,current_timeline->name_length);
-
-		while (current_node != NULL)
+		if ((current_timeline->flags & FLAG_BROADCAST) != FLAG_BROADCAST)
 		{
-			/* start the node */
-			write_numerics_record(LINKER_NODE_START,outfile,current_node->level,current_node->flags);
+			current_node = current_timeline->node;
 
-			/* check the messages that have been sent from the current node */
-			current_message = current_node->sent_message;
+			write_group_record(LINKER_TIMELINE,outfile,current_timeline->group,current_timeline->name,current_timeline->name_length);
 
-			if (current_message != NULL)
+			while (current_node != NULL)
 			{
-				write_message_record(	LINKER_SENT_MESSAGE,
-										outfile,
-										current_node,
-										current_message->receiver,
-										current_message->target_timeline,
-										current_message->name,
-										current_message->name_length);
+				/* start the node */
+				write_numerics_record(LINKER_NODE_START,outfile,current_node->level,current_node->flags);
+
+				/* check the messages that have been sent from the current node */
+				current_message = current_node->sent_message;
+
+				if (current_message != NULL)
+				{
+					write_message_record(	LINKER_SENT_MESSAGE,
+							outfile,
+							current_node,
+							current_message->receiver,
+							current_message->target_timeline,
+							current_message->name,
+							current_message->name_length);
+				}
+
+				if (current_node->received_message == NULL && current_node->wait_message.name_length > 0)
+				{
+					/* TODO: not sure if this is required to be output */
+					printf("w: %s (%p %p)\n",current_node->wait_message.name,(void*)current_node,(void*)current_node->sent_message);
+				}
+
+				write_empty_record(LINKER_NODE_END,outfile);
+
+				current_node = current_node->next;
 			}
-
-			if (current_node->received_message == NULL && current_node->wait_message.name_length > 0)
-			{
-				/* TODO: not sure if this is required to be output */
-				printf("w: %s (%p %p)\n",current_node->wait_message.name,(void*)current_node,(void*)current_node->sent_message);
-			}
-
-			write_empty_record(LINKER_NODE_END,outfile);
-
-			current_node = current_node->next;
 		}
 
 		current_timeline = current_timeline->next;
@@ -2481,8 +2489,6 @@ unsigned int	produce_output(char* output_name)
 		file_header[FILE_NAME_LENGTH+1] = 0;
 
 		write(outfile.outfile,file_header,FILE_HEADER_SIZE);
-
-		hex_dump(file_header,FILE_HEADER_SIZE);
 
 		/* ok, we have an open file */
 		while (current != NULL)
