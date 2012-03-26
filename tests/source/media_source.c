@@ -41,7 +41,7 @@ void main_loop()
 	/**
 	 * @waitfor: SERVER_ANNOUNCE
 	 * @call: initialise_function
-	 * @parameter: MEDIA_SOURCE
+	 * @parameter: MEDIA_SOURCE	this is a funny thing
 	 * @timeline: media_source
 	 */
 

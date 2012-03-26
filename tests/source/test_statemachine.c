@@ -1,7 +1,9 @@
-/*--------------------------------------------------------------------------------*
+/**--------------------------------------------------------------------------------*
  *               Document Generator Project
  *			        by Peter Antoine
  *
+ * @file: test_statemachine
+ * @group: hello
  * Name  : test_statemachine
  * Desc  : This file is a test file for the State Machine.
  *

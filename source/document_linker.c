@@ -41,7 +41,7 @@ static unsigned int	g_max_call_depth	= 10;
  * Linking Structures
  *--------------------------------------------------------------------------------*/
 GROUP 	g_group_tree = {{0x00},0,0,NULL,NULL,NULL,NULL};
-static FUNCTION	g_function_list = {0,0,{0x00},NULL,NULL};
+static FUNCTION		g_function_list = {0,0,{0x00},NULL,NULL};
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : test_walk_node_tree
@@ -234,6 +234,77 @@ MESSAGE*	create_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
 	new_message->sending_timeline = sender->timeline;
 
 	return new_message;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : find_api_function
+ * Desc : This function will find a named api function in the list of functions.
+ *--------------------------------------------------------------------------------*/
+API_FUNCTION*	find_api_function(unsigned char* name, unsigned int name_length, GROUP* group)
+{
+	API_FUNCTION* 	result = NULL;
+	API_FUNCTION*	current_func;
+
+	if (group->api != NULL)
+	{
+		/* add it to the end of the list */
+		current_func = group->api->function_list;
+
+		while (current_func != NULL)
+		{
+			if (current_func->name.name_length == name_length && memcmp(name,current_func->name.name,current_func->name.name_length) == 0)
+			{
+				result = current_func;
+				break;
+			}
+
+			current_func = current_func->next;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_function
+ * Desc : This function will add a named function in the list of functions.
+ *--------------------------------------------------------------------------------*/
+API_FUNCTION*	add_api_function(unsigned char* name, unsigned int name_length, GROUP* group)
+{
+	API_FUNCTION* 	result = calloc(1,sizeof(API_FUNCTION));
+	API_FUNCTION*	current_func;
+
+	if (group->api == NULL)
+	{
+		/* first definition of an api */
+		group->api = calloc(1,sizeof(API));
+		group->api->function_list = result;
+		group->api->group = group;
+	}
+	else
+	{
+		/* add it to the end of the list */
+		current_func = group->api->function_list;
+
+		while (current_func != NULL)
+		{
+			if (current_func->next == NULL)
+			{
+				current_func->next = result;
+				break;
+			}
+
+			current_func = current_func->next;
+		}
+	}
+
+	/* set the values of the new function */
+	result->name.name_length = name_length;
+	
+	result->name.name = malloc(name_length);
+	memcpy(result->name.name,name,name_length);
+			
+	return result;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -502,6 +573,141 @@ unsigned int	add_block_function(BLOCK_NODE* block, FUNCTION** local_function_lis
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_block_file
+ * Desc : This will add the block for the file. It's major function is to set the
+ *        defaults that are require while processing this file.
+ *--------------------------------------------------------------------------------*/
+unsigned int	add_block_file(BLOCK_NODE* block, GROUP** local_group_list)
+{
+	unsigned int result = EC_OK;
+
+	/* TODO: handle the other fields except the ones required for processing */
+
+	if (block->group != NULL)
+	{
+		local_group_list[0] = block->group;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_block_api
+ * Desc : This will add the block for the api. This can add fields to the parts
+ *        of the API.
+ *--------------------------------------------------------------------------------*/
+unsigned int	add_block_api(BLOCK_NODE* block, GROUP** local_group_list)
+{
+	unsigned int		result = EC_OK;
+	API_RETURNS*		current_return;
+	API_PARAMETER*		current_parameter;
+	NAME_PAIRS_LIST*	current_item;
+
+	if (block->group == NULL)
+	{
+		/* if no group defined, default to the default */
+		block->group = local_group_list[0];
+	}
+
+	if (block->description.name_length > 0)
+	{
+		block->api_function->description.name = block->description.name;
+		block->api_function->description.name_length = block->description.name_length;
+	}
+
+	if (block->action.name_length > 0)
+	{
+		block->api_function->action.name = block->action.name;
+		block->api_function->action.name_length = block->action.name_length;
+	}
+
+	if (block->num_parameters > 0)
+	{
+		current_item = &block->parameters;
+
+		while (current_item != NULL)
+		{
+			current_parameter = block->api_function->parameter_list;
+
+			/* find the parameter in the api's function list */
+			while(current_parameter != NULL)
+			{
+				if (current_item->name.name_length == current_parameter->name.name_length && 
+					memcmp(current_item->name.name,current_parameter->name.name,current_item->name.name_length) == 0)
+				{
+					/* found the item - set the brief */
+					if (current_parameter->brief.name_length > 0)
+					{
+						/* already has a parameter */
+						printf("ERROR: duplicate\n");
+					}
+					else
+					{
+						current_parameter->brief.name = current_item->string.name;
+						current_parameter->brief.name_length = current_item->string.name_length;
+					}
+					break;
+				}
+				
+				current_parameter = current_parameter->next;
+			}
+
+			current_item = current_item->next;
+		}
+	}
+
+	/* add the return values to the function */
+	if (block->num_returns > 0)
+	{
+		current_item = &block->returns;
+
+		while (current_item != NULL)
+		{
+			if (block->api_function->returns_list == NULL)
+			{
+				block->api_function->returns_list = malloc(sizeof(API_RETURNS));
+						
+				block->api_function->returns_list->value.name = current_item->name.name;
+				block->api_function->returns_list->value.name_length = current_item->name.name_length;
+				
+				block->api_function->returns_list->brief.name = current_item->string.name;
+				block->api_function->returns_list->brief.name_length = current_item->string.name_length;
+				
+				block->api_function->returns_list->next = NULL;
+			}
+			else
+			{
+				current_return = block->api_function->returns_list;
+
+				while(current_return != NULL)
+				{
+					if (current_return->next == NULL)
+					{
+						current_return->next = malloc(sizeof(API_RETURNS));
+
+						current_return->next->value.name = current_item->name.name;
+						current_return->next->value.name_length = current_item->name.name_length;
+
+						current_return->next->brief.name = current_item->string.name;
+						current_return->next->brief.name_length = current_item->string.name_length;
+
+						current_return->next->next = NULL;
+						break;
+					}
+
+					current_return = current_return->next;
+				}
+			}
+
+
+			current_item = current_item->next;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_block_state
  * Desc : This function will add a state block to the diagram tree.
  *--------------------------------------------------------------------------------*/
@@ -597,10 +803,15 @@ unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** l
 	TRIGGER*			trigger = NULL;
 	STATE_TRANSITION*	current_trans  = NULL;
 	STATE_TRANSITION*	new_transition = NULL;
+	unsigned int		temp = EC_OK;
 	unsigned int		result = EC_OK;
 
 	/* validate the node first */
-	if (block->state != NULL)
+	if (block->type == ATOM_BLOCK_FILE)
+	{
+		result = add_block_file(block,local_group_list);
+	}
+	else if (block->state != NULL)
 	{
 		result = add_block_state(block,local_group_list);
 
@@ -609,9 +820,21 @@ unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** l
 	{
 		result = add_block_node(block,local_group_list);
 	}
-	else if ((block->flags & FLAG_IN_FUNCTION) == FLAG_IN_FUNCTION)
+	else if (block->api_function != NULL || (block->flags & FLAG_IN_FUNCTION) == FLAG_IN_FUNCTION)
 	{
-		result = add_block_function(block,local_function_list);
+		/* block can both be an API and a function */
+		if (block->api_function != NULL)
+		{
+			result = add_block_api(block,local_group_list);
+		}
+
+		if ((block->flags & FLAG_IN_FUNCTION) == FLAG_IN_FUNCTION)
+		{
+			if ((temp = add_block_function(block,local_function_list)) != EC_OK)
+			{
+				result = temp;
+			}
+		}
 	}
 	else
 	{
@@ -627,10 +850,154 @@ unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** l
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_numeric_to_block
+ * Desc : This function will add the numeric atom to the block.
+ *--------------------------------------------------------------------------------*/
+unsigned int	add_numeric_to_block (	GROUP**			local_group_list,
+ 										FUNCTION**		local_function_list,
+										API_FUNCTION**	local_api_function_list,
+										BLOCK_NODE*		node,
+										unsigned char*	record,
+										unsigned char*	payload,
+										unsigned int	payload_length )
+{
+	unsigned int	result = EC_OK;
+	unsigned int	line_number = line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
+	unsigned int	numeric_value;
+	
+	numeric_value =  ((((unsigned int) payload[0])<< 24) |
+					  (((unsigned int) payload[1])<< 16) |
+					  (((unsigned int) payload[2])<< 16) |
+					   ((unsigned int) payload[3]));
+
+	switch(record[RECORD_ATOM])
+	{
+		case ATOM_API:
+				if (numeric_value > MAX_GROUPS_PER_FILE)
+				{
+					result = EC_UNDEFINED_API;
+					raise_warning(line_number,result,NULL,NULL);
+				}
+				else
+				{
+					node->api_function = local_api_function_list[numeric_value];
+				}
+			break;
+
+		case ATOM_GROUP:
+				if (numeric_value > MAX_GROUPS_PER_FILE)
+				{
+					result = EC_UNDEFINED_GROUP;
+					raise_warning(line_number,result,NULL,NULL);
+				}
+				else
+				{
+					node->group = local_group_list[numeric_value];
+				}
+			break;
+
+		default:
+			printf("atom: -- %d %d\n",record[RECORD_ATOM],ATOM_DESCRIPTION);
+			result = EC_UNKNOWN_ATOM;
+			raise_warning(line_number,result,NULL,NULL);
+			break;
+	}
+
+	return result;
+}
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_to_pair_list
+ * Desc : This function will add a pair to the pair list.
+ *--------------------------------------------------------------------------------*/
+void	add_to_pair_list(NAME_PAIRS_LIST* list, NAME* name, NAME* string)
+{
+	NAME_PAIRS_LIST*	current_item;
+
+	if (list->name.name_length == 0)
+	{
+		copy_name(name,&list->name);
+		copy_name(string,&list->string);
+	}
+	else
+	{
+		current_item = list;
+
+		while (current_item != NULL)
+		{
+			if (current_item->next == NULL)
+			{
+				current_item->next = malloc(sizeof(NAME_PAIRS_LIST));
+				copy_name(name,&current_item->next->name);
+				copy_name(string,&current_item->next->string);
+				break;
+			}
+
+			current_item = current_item->next;
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_pair_to_block
+ * Desc : This function will add the numeric atom to the block.
+ *--------------------------------------------------------------------------------*/
+unsigned int	add_pair_to_block (	GROUP**			local_group_list,
+ 									FUNCTION**		local_function_list,
+									API_FUNCTION**	local_api_function_list,
+									BLOCK_NODE*		node,
+									unsigned char*	record,
+									unsigned char*	payload,
+									unsigned int	payload_length )
+{
+	unsigned int	result = EC_OK;
+	unsigned int	line_number = line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
+	NAME			name;
+	NAME			string;
+
+	name.name			= &payload[2];
+	name.name_length	= ((((unsigned int)payload[0]) << 8) | payload[1]);
+
+	string.name			= &payload[2 + 2 + name.name_length];
+	string.name_length	= ((((unsigned int)payload[2 + name.name_length]) << 8) | payload[1 + 2 + name.name_length]);
+	
+	switch(record[RECORD_ATOM])
+	{
+		case ATOM_PARAMETER:
+				node->num_parameters++;
+				add_to_pair_list(&node->parameters,&name,&string);
+			break;
+
+		case ATOM_RETURNS:
+				node->num_returns++;
+				add_to_pair_list(&node->returns,&name,&string);
+			break;
+
+		default:
+			printf("atom: -- %d %d\n",record[RECORD_ATOM],ATOM_DESCRIPTION);
+			result = EC_UNKNOWN_ATOM;
+			raise_warning(line_number,result,NULL,NULL);
+			break;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_atom_to_block
  * Desc : This function will add the atom to the block. 
+ *
+ * TODO: fix this code it knows the record format, and it should not. Means that
+ *       too many functions have to be changed when the format changes.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_atom_to_block ( GROUP** local_group_list, FUNCTION** local_function_list, BLOCK_NODE* node, unsigned char* record, unsigned char* payload, unsigned int payload_length )
+unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
+									FUNCTION**		local_function_list,
+									API_FUNCTION**	local_api_function_list,
+									BLOCK_NODE*		node,
+									unsigned char*	record,
+									unsigned char*	payload,
+									unsigned int	payload_length )
 {
 	unsigned int	in_function = 0;
 	unsigned int	result = EC_OK;
@@ -639,19 +1006,55 @@ unsigned int	add_atom_to_block ( GROUP** local_group_list, FUNCTION** local_func
 	TRIGGER*		trigger;
 	FUNCTION*		function;
 
-	if (group_id != DEFAULT_GROUP && (group_id & RECORD_FUNCTION_MASK) == RECORD_FUNCTION_MASK)
+	if (group_id != DEFAULT_GROUP && (group_id & RECORD_FUNC_API_MASK) == RECORD_FUNCTION_FLAG)
 	{
 		/* the atom is within a function */
 		node->flags |= FLAG_IN_FUNCTION;
-		group_id &= ~RECORD_FUNCTION_MASK;
+		group_id &= ~RECORD_FUNC_API_MASK;
 	
 		node->function = local_function_list[group_id+1];
 
 		in_function = 1;
 	}
 
+	if (group_id != DEFAULT_GROUP && ((group_id & RECORD_FUNC_API_MASK) == RECORD_API_FLAG))
+	{
+		node->api_function = local_api_function_list[(~RECORD_FUNC_API_MASK) & group_id];
+	}
+	
 	switch(record[RECORD_ATOM])
 	{
+		case ATOM_FILE:
+			node->type = ATOM_BLOCK_FILE;
+			break;
+	
+		case ATOM_AUTHOR:
+			if (node->author.name_length > 0)
+			{
+				result = EC_MULTIPLE_AUTHORS_IN_ONE_BLOCK;
+				line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
+				raise_warning(line_number,result,NULL,NULL);
+			}
+			else
+			{
+				node->author.name_length = payload_length;
+				memcpy(node->author.name,payload,payload_length);
+			}
+			break;
+
+		case ATOM_ACTION:
+			node->action.name = realloc(node->action.name,node->action.name_length+payload_length);
+			memcpy(&node->action.name[node->action.name_length],payload,payload_length);
+			node->action.name_length += payload_length;
+			break;
+
+		case ATOM_DESCRIPTION:
+			node->description.name = realloc(node->description.name,node->description.name_length+payload_length);
+			memcpy(&node->description.name[node->description.name_length],payload,payload_length);
+			node->description.name_length += payload_length;
+
+			break;
+
 		case ATOM_STATE:
 			if (group_id == DEFAULT_GROUP)
 			{
@@ -683,7 +1086,7 @@ unsigned int	add_atom_to_block ( GROUP** local_group_list, FUNCTION** local_func
 			}
 			break;
 
-		case ATOM_NEXT:
+			case ATOM_NEXT:
 			if (node->timeline != NULL)
 			{
 				line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
@@ -910,10 +1313,6 @@ unsigned int	add_atom_to_block ( GROUP** local_group_list, FUNCTION** local_func
 			}
 			break;
 
-		case ATOM_PARAMETER:
-			/* add parameter to parameter list for block node */
-			break;
-
 			/* handle atoms that take a name */
 		case ATOM_ACTIVATION:
 			break;
@@ -923,11 +1322,100 @@ unsigned int	add_atom_to_block ( GROUP** local_group_list, FUNCTION** local_func
 			break;
 
 		default:
+			printf("++ atom: %d %d\n",record[RECORD_ATOM],ATOM_DESCRIPTION);
 			line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
 			raise_warning(line_number,EC_UNKNOWN_ATOM,NULL,NULL);
 			result = EC_UNKNOWN_ATOM;
 			break;
 	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : decode_api_function_type
+ * Desc : This function will decode the record and add it to the current api
+ *        function.
+ *--------------------------------------------------------------------------------*/
+unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, NAME* type, NAME* name, NAME* brief)
+{
+	unsigned int	result = 0;
+	API_PARAMETER*	new_parameter;
+
+	if (atom == ATOM_API)
+	{
+		/* set the API's name and type */
+		function->name.name = name->name;
+		function->name.name_length = name->name_length;
+	
+		function->return_type.name = type->name;
+		function->return_type.name_length = type->name_length;
+	}
+	else if (atom == ATOM_PARAMETER)
+	{
+		new_parameter = calloc(1,sizeof(API_PARAMETER));
+
+		new_parameter->name.name = name->name;
+		new_parameter->name.name_length = name->name_length;
+		new_parameter->type.name = type->name;
+		new_parameter->type.name_length = type->name_length;
+		new_parameter->brief.name = brief->name;
+		new_parameter->brief.name_length = brief->name_length;
+
+		new_parameter->next = function->parameter_list;
+		function->parameter_list = new_parameter;
+	}
+	else
+		printf("unkown\n");
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : decode_type
+ * Desc : This function will decode the type record.
+ *--------------------------------------------------------------------------------*/
+unsigned int	decode_type(unsigned char* record, unsigned int record_length, NAME* type, NAME* name, NAME* brief)
+{
+	unsigned int 	pos = 0;
+	unsigned int 	result = 0;
+	unsigned short	length;
+
+	/* get the type */
+	length = ((((unsigned int)record[pos]) << 8) | record[pos+1]);
+	type->name_length = length;
+
+	if (length > 0)
+	{
+		type->name = malloc(length);
+		memcpy(type->name,&record[2],length);
+	}
+
+	/* get the name */
+	pos += 2 + length;
+	
+	length = ((((unsigned int)record[pos]) << 8) | record[pos+1]);
+	name->name_length = length;
+
+	if (length > 0)
+	{
+		name->name = malloc(length);
+		memcpy(name->name,&record[2+pos],length);
+	}
+
+	/* get the name */
+	pos += 2 + length;
+	
+	length = ((((unsigned int)record[pos]) << 8) | record[pos+1]);
+	brief->name_length = length;
+
+	if (length > 0)
+	{
+		brief->name = malloc(length);
+		memcpy(brief->name,&record[2+pos],length);
+	}
+
+	return result;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -941,25 +1429,32 @@ unsigned int	process_input(const char* filename)
 	int				infile;
 	int				bytes_read;
 	unsigned int 	result = 0;
+	unsigned int	line_number = 0;
 	unsigned int	num_groups = 1;
 	unsigned int	num_functions = 1;
+	unsigned int	num_api_functions = 0;
 	unsigned int	record_size;
 	unsigned int	file_name_size;
 	unsigned int	new_block_number;
+	unsigned int	current_api_function = MAX_GROUPS_PER_FILE;
 	unsigned char	signature[4] = COMPILED_SOURCE_MAGIC;
 	unsigned char	record[RECORD_DATA_START];
 	unsigned char	header[FILE_HEADER_SIZE];
+	unsigned short	group;
+	NAME			type;
+	NAME			name;
+	NAME			brief;
 	BLOCK_NODE		block_node;
 	
-	static GROUP*		local_group[MAX_GROUPS_PER_FILE];
-	static FUNCTION*	local_functions[MAX_GROUPS_PER_FILE];
+	static GROUP*			local_group[MAX_GROUPS_PER_FILE];
+	static FUNCTION*		local_functions[MAX_GROUPS_PER_FILE];
+	static API_FUNCTION*	local_api_functions[MAX_GROUPS_PER_FILE];
 	static unsigned char	source_file_name[FILENAME_MAX+1];
 
 	memset(&block_node,0,sizeof(block_node));
 	block_node.line_number = 0;
 
 	local_group[0] = &g_group_tree;
-	local_group[DEFAULT_GROUP] = NULL;
 
 	g_input_filename = NULL;
 	g_source_filename = source_file_name;
@@ -1006,59 +1501,132 @@ unsigned int	process_input(const char* filename)
 				/* now read the atoms */
 				while ((bytes_read = read(infile,record,RECORD_DATA_START)) == RECORD_DATA_START)
 				{
+					line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
 					record_size = ((((unsigned int)record[RECORD_DATA_SIZE]) << 8) | record[RECORD_DATA_SIZE+1]);
 					new_block_number = ((((unsigned int)record[RECORD_BLOCK_NUM]) << 8) | record[RECORD_BLOCK_NUM+1]);
 
+					/* check to see if the block number changes */
 					if (new_block_number != block_node.block_number)
 					{
 						if (block_node.line_number != 0)
 						{
+							/* add the block to the output */
 							add_block(&block_node,local_group,local_functions);
 						}
 
 						memset(&block_node,0,sizeof(block_node));
-						block_node.line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
+						block_node.line_number = line_number;
 						block_node.block_number = new_block_number;
 					}
 
-					if (record_size > 0)
+					if (record_size > 0 && read(infile,record_buffer,record_size) != record_size)
 					{
-						if (read(infile,record_buffer,record_size) != record_size)
+						/* failed to read the record --- problem with the file */
+						printf("length wrong: %d %04x %d\n",record_size,record_size,record[RECORD_TYPE]);
+						raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
+						result = 1;
+					}
+					else
+					{
+						switch(record[RECORD_TYPE])
 						{
-							/* failed to read the record --- problem with the file */
-							raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
-							result = 1;
-						}
-						else
-						{
-							switch(record[RECORD_TYPE])
-							{
-								case INTERMEDIATE_RECORD_FUNCTION:
-									if ((local_functions[num_functions] = find_function(record_buffer,record_size)) == NULL)
-									{
-										local_functions[num_functions] = add_function(record_buffer,record_size,0);
-									}
-									num_functions++;
-									break;
+							case INTERMEDIATE_RECORD_EMPTY:
+								if (record[RECORD_ATOM] == ATOM_API)
+								{
+									current_api_function = MAX_GROUPS_PER_FILE;
+								}
+								break;
 
-								case INTERMEDIATE_RECORD_GROUP:
+							case INTERMEDIATE_RECORD_FUNCTION:
+								if ((local_functions[num_functions] = find_function(record_buffer,record_size)) == NULL)
+								{
+									local_functions[num_functions] = add_function(record_buffer,record_size,0);
+								}
+								num_functions++;
+								break;
+
+							case INTERMEDIATE_RECORD_API:
+								group = (((unsigned int)(record[RECORD_GROUP]) << 8) | record[RECORD_GROUP+1]);
+
+								if (group == DEFAULT_GROUP)
+								{
+									group = 0;
+								}
+
+								if (current_api_function != MAX_GROUPS_PER_FILE)
+								{
+									printf("ERROR: faile nested functions\n");
+								}
+
+								if ((local_api_functions[num_api_functions] = find_api_function(record_buffer,record_size,local_group[group])) == NULL)
+								{
+									local_api_functions[num_api_functions] = add_api_function(record_buffer,record_size,local_group[group]);
+								}
+
+								current_api_function = num_api_functions;
+								num_api_functions++;
+								break;
+
+							case INTERMEDIATE_RECORD_TYPE:
+								result = decode_type(record_buffer,record_size,&type,&name,&brief);
+								
+								if (current_api_function != INVALID_ITEM)
+								{
+									decode_api_function_type(local_api_functions[current_api_function],record[RECORD_ATOM],&type,&name,&brief);
+								}
+								else
+									printf("ERROR: not an api record\n");
+								break;
+
+							case INTERMEDIATE_RECORD_GROUP:
+								/* does not have a name then it should map to the default */
+								if (record_size > 0)
+								{
 									if ((local_group[num_groups] = find_group(&g_group_tree,record_buffer,record_size)) == NULL)
 									{
 										local_group[num_groups] = add_group(&g_group_tree,record_buffer,record_size);
 									}
 
 									num_groups++;
-									break;
+								}
+								break;
 
-								case INTERMEDIATE_RECORD_NAME:
-								case INTERMEDIATE_RECORD_STRING:
-									add_atom_to_block(local_group,local_functions,&block_node,record,record_buffer,record_size);
-									break;
+							case INTERMEDIATE_RECORD_NAME:
+							case INTERMEDIATE_RECORD_STRING:
+							case INTERMEDIATE_RECORD_MULTILINE:
+								add_atom_to_block(	local_group,
+													local_functions,
+													local_api_functions,
+													&block_node,
+													record,
+													record_buffer,
+													record_size);
+								break;
 
-								default:
-									raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
-									result = 1;
-							}
+							case INTERMEDIATE_RECORD_NUMBERIC:
+								add_numeric_to_block(	local_group,
+														local_functions,
+														local_api_functions,
+														&block_node,
+														record,
+														record_buffer,
+														record_size);
+								break;
+	
+							case INTERMEDIATE_RECORD_PAIR:
+								add_pair_to_block(	local_group,
+													local_functions,
+													local_api_functions,
+													&block_node,
+													record,
+													record_buffer,
+													record_size);
+								break;
+
+							default:
+								printf("=== %d\n",record[RECORD_TYPE]);
+								raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
+								result = 1;
 						}
 					}
 				}
@@ -2053,6 +2621,12 @@ void	write_to_file(OUTPUT_FILE* file)
 		memcpy(&file->buffer[file->offset],file->buffer_list[3].buffer,file->buffer_list[3].size);
 		file->offset += file->buffer_list[3].size;
 	}
+
+	if (file->parts > 4)
+	{
+		memcpy(&file->buffer[file->offset],file->buffer_list[4].buffer,file->buffer_list[4].size);
+		file->offset += file->buffer_list[4].size;
+	}
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -2297,6 +2871,111 @@ void	write_message_record(	unsigned char	type,
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_type_record
+ * Desc : This function writes a api type record to the file.
+ *--------------------------------------------------------------------------------*/
+void	write_type_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, NAME* name, NAME* brief)
+{
+	unsigned char	buffer[5];
+
+	buffer[0] = type;
+	buffer[1] = type_type->name_length & 0xff;
+	buffer[2] = name->name_length & 0xff;
+	buffer[3] = (brief->name_length & 0xff00) >> 8;
+	buffer[4] = brief->name_length & 0xff;
+
+	file->parts = 4;
+	file->record_size = 5 + type_type->name_length + name->name_length + brief->name_length;
+	file->buffer_list[0].size = 5;
+	file->buffer_list[0].buffer = buffer;
+	file->buffer_list[1].size = 	type_type->name_length;
+	file->buffer_list[1].buffer =	type_type->name;
+	file->buffer_list[2].size = 	name->name_length;
+	file->buffer_list[2].buffer =	name->name;
+	file->buffer_list[3].size =		brief->name_length;
+	file->buffer_list[3].buffer =	brief->name;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_pair_record
+ * Desc : This function writes a api pair record to the file.
+ *--------------------------------------------------------------------------------*/
+void	write_pair_record(unsigned char type, OUTPUT_FILE* file, NAME* value, NAME* string)
+{
+	unsigned char	buffer[4];
+
+	buffer[0] = type;
+	buffer[1] = value->name_length & 0xff;
+	buffer[2] = (string->name_length & 0xff00) >> 8;
+	buffer[3] = string->name_length & 0xff;
+
+	file->parts = 3;
+	file->record_size = 4 + value->name_length + string->name_length;
+	file->buffer_list[0].size = 4;
+	file->buffer_list[0].buffer = buffer;
+	file->buffer_list[1].size = 	value->name_length;
+	file->buffer_list[1].buffer =	value->name;
+	file->buffer_list[2].size = 	string->name_length;
+	file->buffer_list[2].buffer =	string->name;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : output_api
+ * Desc : This function will output the api to the open file.
+ *--------------------------------------------------------------------------------*/
+void	output_api(OUTPUT_FILE* outfile, API* api)
+{
+	NAME			empty = {NULL,0};
+	API_RETURNS*	current_returns;
+	API_FUNCTION*	current_function;
+	API_PARAMETER*	current_parameter;
+
+	/* let the file know that we are starting a new api */
+	write_string_record(LINKER_API_START,outfile,api->group->name,api->group->name_length);
+	
+	/* write all the functions to the file */
+	current_function = api->function_list;
+
+	while(current_function != NULL)
+	{
+		write_type_record(LINKER_API_FUNCTION,outfile,&current_function->return_type,&current_function->name,&empty);
+		write_string_record(LINKER_API_DESCRIPTION,outfile,current_function->description.name,current_function->description.name_length);
+		write_string_record(LINKER_API_ACTION,outfile,current_function->action.name,current_function->action.name_length);
+		
+		/* dump parameter */
+		current_parameter = current_function->parameter_list;
+
+		while(current_parameter != NULL)
+		{
+			write_type_record(LINKER_API_PARAMETER,outfile,&current_parameter->type,&current_parameter->name,&current_parameter->brief);
+
+			current_parameter = current_parameter->next;
+		}
+
+		/* dump returns */
+		current_returns = current_function->returns_list;
+
+		while(current_returns != NULL)
+		{
+			write_pair_record(LINKER_API_RETURNS,outfile,&current_returns->value,&current_returns->brief);
+
+			current_returns = current_returns->next;
+		}
+		
+		write_empty_record(LINKER_API_FUNCTION_END,outfile);
+
+		current_function = current_function->next;
+	}
+
+	/* Ok, we have finished outputting the API */
+	write_empty_record(LINKER_API_END,outfile);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : output_state_machine
  * Desc : This function will output the state machine to the open file.
  *--------------------------------------------------------------------------------*/
@@ -2425,12 +3104,12 @@ void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_di
 				if (current_message != NULL)
 				{
 					write_message_record(	LINKER_SENT_MESSAGE,
-							outfile,
-							current_node,
-							current_message->receiver,
-							current_message->target_timeline,
-							current_message->name,
-							current_message->name_length);
+											outfile,
+											current_node,
+											current_message->receiver,
+											current_message->target_timeline,
+											current_message->name,
+											current_message->name_length);
 				}
 
 				if (current_node->received_message == NULL && current_node->wait_message.name_length > 0)
@@ -2502,6 +3181,12 @@ unsigned int	produce_output(char* output_name)
 			{
 				output_sequence_diagram(&outfile,current->sequence_diagram);
 			}
+
+			if (current->api != NULL)
+			{
+				output_api(&outfile,current->api);
+			}
+
 			current = current->next;
 		}
 

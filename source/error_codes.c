@@ -71,7 +71,15 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"message being sent to an ancestor in the message chain. Loops are not allowed.",
 	"input file signature incorrect.",
 	"INTERNAL ERROR: input found unknown state",
-	"Unknown item requested"
+	"Unknown item requested",
+	"Multiple authors in a single block",
+	"Undefined group referenced",
+	"@file MUST be in the first block of the file",
+	"Unsupported input file type",
+	"INTERNAL ERROR: invalid parameter",
+	"INTERNAL ERROR: Parameter Added - you should never read this.",
+	"Duplicate field in definition",
+	"Undefined API referenced"
 };
 	
 /*----- FUNCTION -----------------------------------------------------------------*

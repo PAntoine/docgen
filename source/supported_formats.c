@@ -40,7 +40,10 @@ OUTPUT_FORMATS	output_formats[] =
 {
 	{text_fmt,	TEXT_LEN,	text_open,text_close,text_output_header,text_output_footer,text_output_raw,
 							text_output_timelines,text_output_message,
-							text_output_states,	text_output_start_state,text_output_transition,text_output_end_state},
+							text_output_states,	text_output_start_state,text_output_transition,text_output_end_state,
+							text_output_api_name_function, text_output_api_description_function, text_output_api_prototype_function,
+							text_output_api_parameters_function, text_output_api_action_function, text_output_api_returns_function}
+
 #if 0
 	{ "dot",dot_output_header,dot_output_footer,dot_output_timelines,dot_output_message,dot_output_states,dot_output_transition}
 #endif
@@ -154,6 +157,7 @@ unsigned int	output_open(DRAW_STATE* draw_state, char* input_file_name, unsigned
 	unsigned int	file_name_length;
 	unsigned char*	file_name;
 
+	draw_state->format = OUTPUT_TEXT;
 	get_filename((unsigned char*)input_file_name,&file_name,&file_name_length);
 
 	if (draw_state->format < OUTPUT_FORMATS_MAX)

@@ -58,22 +58,32 @@
  * general file format
  *--------------------------------------------------------------------------------*/
 /* record types */
-#define INTERMEDIATE_RECORD_GROUP		(0)
-#define INTERMEDIATE_RECORD_FUNCTION	(1)
-#define INTERMEDIATE_RECORD_NAME		(2)
-#define INTERMEDIATE_RECORD_STRING		(3)
+#define INTERMEDIATE_RECORD_EOF			( 0)
+#define INTERMEDIATE_RECORD_GROUP		( 1)
+#define INTERMEDIATE_RECORD_API			( 2)
+#define INTERMEDIATE_RECORD_FUNCTION	( 3)
+#define INTERMEDIATE_RECORD_NAME		( 4)
+#define INTERMEDIATE_RECORD_STRING		( 5)
+#define INTERMEDIATE_RECORD_NUMBERIC	( 6)
+#define INTERMEDIATE_RECORD_EMPTY		( 7)
+#define INTERMEDIATE_RECORD_MULTILINE	( 8)
+#define INTERMEDIATE_RECORD_TYPE		( 9)
+#define INTERMEDIATE_RECORD_PAIR		(10)
 
 /* record format */
 #define RECORD_TYPE			(0)
 #define RECORD_ATOM			(1)
 #define RECORD_GROUP		(2)		/* group and functions share the same field */ 
 #define RECORD_FUNCTION		(2) 	/* group and functions share the same field */ 
+#define RECORD_API			(2) 
 #define RECORD_BLOCK_NUM	(4) 
 #define RECORD_LINE_NUM		(6)
 #define RECORD_DATA_SIZE	(8) 
 #define RECORD_DATA_START	(10) 
 
-#define RECORD_FUNCTION_MASK	(0x8000)
+#define RECORD_FUNC_API_MASK	(0xC000)
+#define RECORD_FUNCTION_FLAG	(0xC000)
+#define RECORD_API_FLAG			(0x8000)
 
 /*--------------------------------------------------------------------------------*
  * linker file format
@@ -111,14 +121,20 @@
  *	linker_group				= {string:name}
  *	linker_state_machine_start	= {string:name}
  *	linker_state				= {string:name}
- *	linker_transistion			= {short:group_id,short:to_state,string:name,short:trigger,<trigger_id>,short:num_triggers,<trigger_id>}
+ *	linker_transition			= {short:group_id,short:to_state,string:name,short:trigger,<trigger_id>,short:num_triggers,<trigger_id>}
  *	linker_sequence_start		= {}
  *	linker_timeline				= {string:name}
  *	linker_message				= {string:message,short:to_node,byte:num_parameters}
  *	linker_parameter			= {string:name,byte:type,string:value}
  *	linker_node_start			= {}
  *	linker_sent_message			= {short:message_id,short:to_node}
- *	linker_recieved_message		= {short:message_id,short:from_node}
+ *	linker_received_message		= {short:message_id,short:from_node}
+ *	linker_api_start			= {string:name}
+ *	linker_api_function			= {string:return_type,string:name,string:brief}
+ *	linker_api_description		= {string:description}
+ *	linker_api_parameter		= {string:type,string:name,string:brief}
+ *	linker_api_function_end		= {}
+ *	linker_api_end				= {}
  */
 
 #define LINKER_TRIGGER				( 0)	/* defines a trigger */
@@ -143,6 +159,23 @@
 #define LINKER_SENT_MESSAGE			(18)	/* references a message that is being send from this node */
 #define LINKER_NODE_END				(19)	/* node start */
 #define LINKER_SEQUENCE_END			(20)	/* denotes the end of a sequence diagram */
+#define	LINKER_API_START			(21)	/* the start of the api */
+#define	LINKER_API_FUNCTION			(22)	/* the function prototype */
+#define	LINKER_API_ACTION			(23)	/* the actions for the function */
+#define	LINKER_API_DESCRIPTION		(24)	/* the description of the function */
+#define	LINKER_API_PARAMETER		(25)	/* a parameter to the api */
+#define	LINKER_API_RETURNS			(26)	/* a return value for the api */
+#define	LINKER_API_FUNCTION_END		(27)	/* the end of the function */
+#define	LINKER_API_END				(28)	/* the end of the api */
+
+/*--------------------------------------------------------------------------------*
+ * general useful structures.
+ *--------------------------------------------------------------------------------*/
+typedef struct
+{
+	unsigned char*	name;
+	unsigned int	name_length;
+} NAME;
 
 /*--------------------------------------------------------------------------------*
  * The Group lookup list structures.
@@ -154,6 +187,8 @@ typedef struct
 	unsigned int	hash;
 	unsigned int	name_length;
 	unsigned int	payload_length;
+	unsigned short	line_num;
+	unsigned short	group_id;
 	unsigned char*	name;
 	unsigned char*	payload;
 
@@ -173,13 +208,19 @@ typedef struct tag_lookup_list
  *--------------------------------------------------------------------------------*/
 #define	ATOM_BLOCK_SIZE		(100)
 
+#define ATOM_BLOCK_UNKNOWN	(0)		/* the type of the block is unknown */
+#define ATOM_BLOCK_FILE		(1)		/* the block holds a file type block */
+#define ATOM_BLOCK_STATE	(2)		/* the block holds a state */
+#define ATOM_BLOCK_TIMELINE	(3)		/* the block holds a timeline definition */
+#define ATOM_BLOCK_FUNCTION	(4)		/* the block holds a function definition */
+
 typedef struct
 {
 	unsigned int	type;
 	unsigned int	line;
 	unsigned int	atom;
 	unsigned int	block;
-	unsigned int	function;
+	unsigned int	func_api;
 
 } ATOM_TYPE_ANY;
 
@@ -189,7 +230,7 @@ typedef struct
 	unsigned int	line;
 	unsigned int	atom;
 	unsigned int	block;
-	unsigned int	function;
+	unsigned int	func_api;
 	unsigned int	group;
 	unsigned int	name_length;
 	unsigned char*	name;
@@ -202,16 +243,45 @@ typedef struct
 	unsigned int	line;
 	unsigned int	atom;
 	unsigned int	block;
-	unsigned int	function;
+	unsigned int	func_api;
 	unsigned int	string_length;
 	unsigned char*	string;
 
 } ATOM_TYPE_STRING;
 
+typedef struct
+{
+	unsigned int	type;
+	unsigned int	line;
+	unsigned int	atom;
+	unsigned int	block;
+	unsigned int	func_api;
+	unsigned int	name_length;
+	unsigned int	string_length;
+	unsigned char*	name;
+	unsigned char*	string;
+
+} ATOM_TYPE_PAIR;
+
+
+typedef struct
+{
+	unsigned int	type;
+	unsigned int	line;
+	unsigned int	atom;
+	unsigned int	block;
+	unsigned int	api;
+	unsigned int	func_api;
+	unsigned char	number[4];
+
+} ATOM_TYPE_NUMBER;
+
 typedef union
 {
 	ATOM_TYPE_ANY		any;
 	ATOM_TYPE_NAME		name;
+	ATOM_TYPE_PAIR		pair;
+	ATOM_TYPE_NUMBER	number;
 	ATOM_TYPE_STRING	string;
 
 } ATOM_ITEM;
@@ -282,6 +352,15 @@ typedef struct tag_block_name
 	struct tag_block_name*	next;
 } BLOCK_NAME;
 
+/* state machine types */
+
+typedef struct
+{
+	STATE*	init_state;			/* state machine init node */
+	STATE*	state_list;			/* the nodes in a simple list */
+	GROUP*	group;				/* the owner group */	
+} STATE_MACHINE;
+
 typedef struct tag_trigger
 {
 	unsigned int		flags;					/* the status flags for the item */
@@ -313,12 +392,14 @@ typedef struct tag_state_transition
 
 } STATE_TRANSITION;
 
+/* sequence diagram types */
+
 typedef struct
 {
-	STATE*	init_state;			/* state machine init node */
-	STATE*	state_list;			/* the nodes in a simple list */
-	GROUP*	group;				/* the owner group */	
-} STATE_MACHINE;
+	TIMELINE*		timeline_list;	/* the sequence diagram is made up of a list of timelines */
+	GROUP*			group;			/* the owner group */	
+
+} SEQUENCE_DIAGRAM;
 
 typedef struct tag_parameter
 {
@@ -350,24 +431,6 @@ typedef struct tag_message
 	NODE*				receiver;				/* the node that receives this message */
 	NODE*				sender;					/* the node that sent the message */
 } MESSAGE;
-
-typedef struct
-{
-	TIMELINE*		timeline_list;	/* the sequence diagram is made up of a list of timelines */
-	GROUP*			group;			/* the owner group */	
-
-} SEQUENCE_DIAGRAM;
-
-struct tag_group
-{
-	unsigned char		name[MAX_NAME_LENGTH];
-	unsigned int		name_length;
-	unsigned int		max_message_length;	/* the max message name length */
-	SEQUENCE_DIAGRAM*	sequence_diagram;	/* if not NULL the sequence diagram that belongs to this group */
-	STATE_MACHINE*		state_machine;		/* if not NULL the state machine that belongs to this group */
-	TRIGGER*			trigger_list;		/* the list of triggers that belong to this list */
-	struct tag_group*	next;				/* the next group in the list */
-};
 
 struct tag_timeline
 {
@@ -443,6 +506,71 @@ struct tag_function
 	struct tag_function*	next;
 };
 
+/* api structures */
+typedef struct
+{
+	unsigned int	unsued;		/* to stop warnings */
+} API_TYPE;
+
+typedef struct
+{
+	unsigned int	unsued;		/* to stop warnings */
+} API_DEFINE;
+
+typedef struct tag_api_parameter
+{
+	NAME			name;
+	NAME			type;
+	NAME			brief;
+	struct tag_api_parameter*	next;
+} API_PARAMETER;
+
+typedef struct tag_api_returns
+{
+	NAME			value;
+	NAME			brief;
+
+	struct tag_api_returns*	next;
+} API_RETURNS;
+
+typedef struct tag_api_function
+{
+	unsigned short	max_param_name_length;
+	unsigned short	max_param_type_length;
+	unsigned short	api_id;				/* ID number associated with the API */
+	NAME			name;
+	NAME			return_type;
+	NAME			action;
+	NAME			description;
+	API_PARAMETER*	parameter_list;
+	API_RETURNS*	returns_list;
+	struct tag_api_function*	next;
+} API_FUNCTION;
+
+typedef struct
+{
+	API_TYPE		type_list;			/* the list of types in this API*/
+	API_DEFINE		defines_list;		/* the list of defines in this API */
+	API_FUNCTION*	function_list;		/* the list of functions in this API */
+	GROUP*			group;				/* the owner group */	
+} API;
+
+/* global pull it all together structure */
+
+struct tag_group
+{
+	unsigned char		name[MAX_NAME_LENGTH];
+	unsigned int		name_length;
+	unsigned int		max_message_length;	/* the max message name length */
+	SEQUENCE_DIAGRAM*	sequence_diagram;	/* if not NULL the sequence diagram that belongs to this group */
+	STATE_MACHINE*		state_machine;		/* if not NULL the state machine that belongs to this group */
+	API*				api;				/* if not NULL the api definitions that belong to this group */
+	TRIGGER*			trigger_list;		/* the list of triggers that belong to this list */
+	struct tag_group*	next;				/* the next group in the list */
+};
+
+/* decoder defines */
+
 typedef struct tag_deferred_list
 {
 	NODE*			node;
@@ -452,6 +580,15 @@ typedef struct tag_deferred_list
 	struct tag_deferred_list*	next;
 } DEFFERED_LIST;
 
+typedef struct	tag_name_pairs_list
+{
+	NAME	name;
+	NAME	string;
+
+	struct tag_name_pairs_list*	next;
+
+} NAME_PAIRS_LIST;
+
 typedef struct
 {
 	unsigned int		flags;					/* used for the messages to define the types */
@@ -460,6 +597,8 @@ typedef struct
 	unsigned int		type;					/* the type of the block */
 	unsigned int		tag;					/* the tag for this block */
 	unsigned int		activation;				/* the activation that this belongs to */
+	unsigned int		num_returns;			/* the number of return values */
+	unsigned int		num_parameters;			/* the number of parameters */
 	STATE*				state;					/* state that this block belongs to */
 	GROUP*				group;					/* the group that the node belongs to */
 	FUNCTION*			function;				/* the function that the node belongs to */
@@ -467,13 +606,19 @@ typedef struct
 	TIMELINE*			to_timeline;			/* the timeline that the message is specifically being sent to (optional) */
 	BLOCK_NAME*			trigger;				/* this is a reference to the trigger */
 	BLOCK_NAME*			triggers_list;			/* if this item causes a trigger */
+	API_FUNCTION*		api_function;			/* the block has a reference to an API */
 	SOURCE_REFERENCE*	reference;				/* source reference of the block */
-	BLOCK_NAME			function_to_timeline;	/* differed lookup for function timeline */
-	BLOCK_NAME			message;				/* the message for this block */
 	BLOCK_NAME			after;					/* the message follows the sending of this message */
+	BLOCK_NAME			author;					/* the author field of an api, file or function */
+	BLOCK_NAME			message;				/* the message for this block */
 	BLOCK_NAME			sequence;				/* the message waits for the message to arrive, or responds to it */
 	BLOCK_NAME			condition;				/* if this is a state then the condition for the transition */
 	BLOCK_NAME			transition;				/* if this is a state then transition */
+	NAME				action;					/* this block contains an action */
+	NAME				description;			/* this block contains a description */
+	NAME_PAIRS_LIST		returns;				/* list of return pairs from the header block */
+	NAME_PAIRS_LIST		parameters;				/* list of parameters from the header block */
+	BLOCK_NAME			function_to_timeline;	/* differed lookup for function timeline */
 } BLOCK_NODE;
 
 typedef struct
@@ -500,10 +645,12 @@ typedef struct
 #define	MODEL_LOAD_UNKNOWN					(0)
 #define	MODEL_LOAD_STATE					(1)
 #define	MODEL_LOAD_SEQUENCE					(2)
+#define	MODEL_LOAD_API						(3)
 
 #define TYPE_TEXT							(0)
 #define TYPE_STATE_MACHINE					(1)
 #define TYPE_SEQUENCE_DIAGRAM				(2)
+#define TYPE_API							(3)
 
 #define	INPUT_STATE_INTERNAL_SEARCHING		(0)
 #define	INPUT_STATE_INTERNAL_SCHEME			(1)
@@ -514,12 +661,6 @@ typedef struct
 
 
 /* loading list */
-typedef struct
-{
-	unsigned char*	name;
-	unsigned int	name_length;
-} NAME;
-
 typedef struct tag_name_list
 {
 	unsigned char*	name;

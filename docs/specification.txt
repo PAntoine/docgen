@@ -188,9 +188,6 @@ To allow for markup to be able to set references then [<some text>](atom name) w
 which will cause the main state machine diagram to be inserted at that point in the diagram. All items that
 have been produced by the system can be referenced more than once.
 
-Also, to access sub files, as this makes it possible to create books/web-pages then the following URI will
-be used pdoc://<file_name> and the builder will handle the creation of the reference links.
-
 All docs that are included are built as separate blobs and then referenced. If the final target is to be
 a single object then that will be done by the renderer.
 
@@ -204,7 +201,7 @@ defined as follows:
 
 (Not the definition language may get extended).
 
-The resulting diagram may then be used as follows: pdiag://<diagram_name>
+The resulting diagram may then be used as follows: [model:/<diagram_name>]
 
 4.4 ATOM descriptions (by data type)
 
@@ -356,7 +353,7 @@ These are the currently supported messages and conditionals supported.
  4.4.2.3.7 The @after clause can be specified on a message or an activation, from the same timeline.
  4.4.2.3.8 All messages must what a corresponding @waitsfor.
 
-4.4.3 Global file format atoms
+4.4.3 Global file format ATOMS
 
 4.4.3.1 Structure file header format
 
@@ -382,6 +379,132 @@ This atom when in the file group will define the default timeline for all other 
 
 All states that are listed in 4.4.3.3 are valid and can be given in the @file atom block. They can only be one
 given once and should be at the top of the source file.
+
+4.4.4 API ATOMS
+The following atoms are are used to define API's that are present within a source file. These should be used to
+define the API calls. It is assumed that functions that do not have the @api atom in the block preceding the
+definition of the function will not be part of the API.
+
+4.4.4.1 Structure API
+
+The API will find functions. The structure of the definition of a API function should be:
+
+/**
+ * comment block with the api definition in.
+ */
+<variable amount of white space>
+function_prototype parameters
+
+These will be defined by the language type.
+
+4.4.4.2 Valid atoms for the API
+
+@api:		{function_name}
+The name of the function as it should appear in the api.
+
+@brief:		{ brief description of the fuction}
+The brief description of the function.
+
+@action:	{action description}
+A text section that defines the action of the api. This is a multiline block of text that ends at the next
+atom or the end of the comment block. Also, this can be added to the main body of the function if another
+action block is found.
+
+@group:		{group_name}
+The group that the atom belongs to.
+
+@parameter:	<name>	<description>	One of the parameters, If any.
+Definition of one of the parameters for the function.
+
+@returns:	{value} {reason}
+Definition of one of the return types for the function.
+
+@ignore:	This stops all collection of data from the header block.
+This tag can be used as a nice way of ending a multi-line comment.  It essentially ends the comment block as
+far as the processor is concerned.
+
+4.4.4.3 Validity of API Atoms.
+ 4.4.4.3.1 One one @api will be allowed in a comment block.
+ 4.4.4.3.2 Only one` @brief will be accept in a block.
+ 4.4.4.3.3 @action must follow a @api or be in an @api block.
+ 4.4.4.3.4 @action will be attached to any previous @action found for the the @api.
+ 4.4.4.3.5 @api must be before the function.
+ 4.4.4.3.6 all atoms found within the function following the @api will be attached to the @api.
+
+4.4.5 Data Type ATOMS
+
+The following is to describe the data type definition atoms.
+
+4.4.5.1 Structure Data Type ATOMS
+No inherent type for data types as they will produce a text table within the target document.
+
+4.4.5.2 Valid atoms for the Data Types
+@group:	{group_name}
+The group that the type belongs to.
+
+@type: {type_name}
+This defines the type block and tells the processor that the type that follows is to be decoded.
+
+@defines: {define_name}
+This denotes that the following defines are part of the API. All the defines that follow this bloc will be part
+of the define block. 
+
+@end_define
+This atom is an optional atom the follows a @define so the parser can stop looking for defines to add.
+
+@record: {record_name}
+This atom defines a block that defines a record.
+
+@field:	{type}	{name} {description}
+The above defines a field in the record.
+
+4.4.5.3 Validity of Data Type Atoms.
+ 4.4.4.5.1 One one data definition per block
+ 4.4.4.5.2 The @type and @defines must come before a data type or a #define respectively.
+ 4.4.4.5.3 @end_define must only be used after a @define and after at least one #define.
+
+4.4.6 Manual ATOMS
+The Usage atoms are there to be able to describe the usage of an application. This will allow for the man pages for
+the application to be generated from the code.
+
+4.4.6.1 Structure of Manual ATOMS
+The usage atoms are based on the ones required to produce man pages. But they in and amongst themselves do not have a structure.
+
+4.4.6.2 Valid atoms for Manual
+@name:	{name of the application}
+This is the name of the application as will displayed in the manual pages.
+
+@group: {group name}
+The group that the atom belongs to.
+
+@synopsis: {string}
+This is the standard synopsis of the application flags and usage.
+
+@desc: {multi-line description of the application}
+The basic description of the application.
+
+@examples: {multi-line set of usage examples of the function}
+As stated.
+
+@see also: {string list}
+A list of applications that are part of the application family or are connected to the application.
+
+@copyright: {a copyright string}
+This atom defines a copyright holder.
+
+@licence: {licence name}
+The name of the licence that the application is released under.
+
+@option: {option description}
+The atom is a one-line definition of the option that is defined.
+
+@author: {author name}
+A name of the person that coded the application.
+
+4.4.6.3 Validity of Manual ATOMS
+ 4.4.6.3.1 The @name, @examples, @copyright, @ licence and @author atoms should appear in the @file block.
+ 4.4.6.3.2 Only one @name will be accepted in the Manual group.
+ 4.4.6.3.3 The man page should have the following @name, @synopsis and @desc as a minimum.
 
 4.5 Intermediate object file format.
 
@@ -513,7 +636,7 @@ members are also dependencies.
 
 4.7 Final Output
 
-The other input files (*.pmd) will be read in and scanned for the <pdiag://> url and anyplace that this is
+The other input files (*.pmd) will be read in and scanned for the [model:/ ] url and anyplace that this is
 found on the next new line then the diagram will be inserted. The default for the diagrams are text ascii
 art representations. Also the output will also be as *.md files. The output will follow the standard 
 MarkDown rules. 
@@ -523,3 +646,37 @@ The diagrams will be output as group_name_diagram.md for each of the diagrams fo
 Extension information can be added to the nodes in the sequence trees, these extensions can add links to
 the actual source code lines that defines the atom states and the messages and transitions for the message
 states.
+
+4.7.1 API Output Structure
+
+The API output is levelled in it's structure. *finish this later*
+
+  [model:/<group>/api/function/<item>/<part>]
+  [model:/<group>/api/define/<item>/<part>]
+  [model:/<group>/api/type/<item>/<part>]
+
+if only the api is specified then all the items within the API are exported. If one of the sections are
+specified then all the items within that section is listed. If the item is specified then only the item
+is specified. Also, the sub-part of the item can also be spefied.
+
+i.e. If you have an function in the api.
+
+/**
+ * @api
+ * @group test_1
+ * @desc sdfggdfgdfgdfgdsg
+ *       gfdfggdfgfdgdfgdfgd
+ * @author p.asdsfdsf
+ * @params gdggfgdgdfgdf
+ * @parans fddfsdf
+ * @returns
+ */
+
+Each of the sections can be listed separately.
+
+[model:/test_1/api/function/] will list all.
+[model:/test_1/api/function/name] will only list the nmae.
+[model:/test_1/api/function/prototype] will display the prototype.
+
+Note
+

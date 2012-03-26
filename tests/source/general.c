@@ -14,23 +14,26 @@
  *--------------------------------------------------------------------------------*/
 
 /**
- * @function: initialise_function
+ * @api: 		initialise_function
+ * @function:	initialise_function
  *
  * This function will send the announce to the server to let it know that
  * the device is alive and working.
  */
-void initialise_function()
+static MOOO initialise_function ()
 {
-	/**
-	 * @responds: DEVICE_ANNOUNCE
-	 */
+	{
+		/**
+		 * @responds: DEVICE_ANNOUNCE
+		 */
 
-	/**
-	 * @waitfor: SERVER_RESPONSE
-	 */
+		/**
+		 * @waitfor: SERVER_RESPONSE
+		 */
 
-	/**
-	 * @responds: DEVICE_REGISTER
-	 */
+		/**
+		 * @responds: DEVICE_REGISTER
+		 */
+	}
 }
 

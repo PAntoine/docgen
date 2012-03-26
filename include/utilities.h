@@ -30,6 +30,7 @@ TIMELINE* 		find_timeline ( GROUP* group, unsigned char* name, unsigned int name
 TIMELINE* 		add_timeline ( GROUP* group, unsigned char* name, unsigned int name_length, unsigned int line_number, unsigned int flags );
 STATE* 			add_state ( GROUP* group, unsigned char* name, unsigned int name_length, unsigned int line_number, unsigned int flags );
 STATE* 			find_state ( GROUP* group, unsigned char* name, unsigned int name_length );
+void			copy_name(NAME* from, NAME* to);
 
 void dump(char* string,NAME* name);
 

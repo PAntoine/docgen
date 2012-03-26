@@ -32,7 +32,6 @@ unsigned int	text_open(DRAW_STATE* draw_state, unsigned char* name, unsigned int
 	unsigned int result = EC_FAILED;
 	unsigned int length = name_length + draw_state->path_length;
 
-
 	if ((length + 4) < FILENAME_MAX)
 	{
 		memcpy(&draw_state->path[draw_state->path_length],name,name_length);
@@ -311,4 +310,176 @@ void	text_output_end_state(DRAW_STATE* draw_state,STATE* state)
 
 }
 
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_api_returns_function
+ * Desc : 
+ *--------------------------------------------------------------------------------*/
+void	text_output_api_returns_function(DRAW_STATE* draw_state, API_FUNCTION* function)
+{
+	API_RETURNS*	current_returns = function->returns_list;
+
+	write(draw_state->output_file,"returns:\n",sizeof("returns:\n")-1);
+
+	while (current_returns != NULL)
+	{
+		write(draw_state->output_file,current_returns->value.name,current_returns->value.name_length);
+		write(draw_state->output_file," ",1);
+		write(draw_state->output_file,current_returns->brief.name,current_returns->brief.name_length);
+		write(draw_state->output_file,"\n",1);
+
+		current_returns = current_returns->next;
+	}
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_api_action_function
+ * Desc : This function will output the formatted action.
+ *--------------------------------------------------------------------------------*/
+void	text_output_api_action_function(DRAW_STATE* draw_state, API_FUNCTION* function)
+{
+	write(draw_state->output_file,"action:\n",sizeof("action:\n")-1);
+
+	if (function->action.name_length > 0)
+	{
+		write(draw_state->output_file,function->action.name,function->action.name_length);
+		write(draw_state->output_file,"\n",1);
+	}
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_api_parameters_function
+ * Desc : This function will output the parameter table.
+ *--------------------------------------------------------------------------------*/
+void	text_output_api_parameters_function(DRAW_STATE* draw_state, API_FUNCTION* function)
+{
+	unsigned int	max_length;
+	unsigned int	space_length;
+	unsigned char	spaces[200];
+	API_PARAMETER*	current_parameter;
+
+	/* calculate the maximum number of spaces */
+	if (function->max_param_type_length < 4)
+		function->max_param_type_length = 4;
+	
+	if (function->max_param_name_length < 4)
+		function->max_param_name_length = 4;
+
+	if (function->max_param_type_length > function->max_param_name_length)
+		space_length = function->max_param_type_length + 4;
+	else
+		space_length = function->max_param_name_length + 4;
+
+	memset(spaces,' ',space_length<40?40:space_length);
+	
+	/* Ok, write the title */
+	write(draw_state->output_file,"    Name",8);
+	write(draw_state->output_file,spaces,function->max_param_name_length - 8 + 4);
+	write(draw_state->output_file,"    Type",8);
+	write(draw_state->output_file,spaces,function->max_param_type_length - 8 + 4);
+	write(draw_state->output_file,"    Description",15);
+	write(draw_state->output_file,spaces,40);
+	write(draw_state->output_file,"\n",1);
+
+	/* now write the underline */
+	memset(spaces,'-',space_length<40?40:space_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,function->max_param_name_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,function->max_param_type_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,40);
+	write(draw_state->output_file,"\n",1);
+
+	/* clear the spaces for the write */
+	memset(spaces,' ',space_length);
+
+	current_parameter = function->parameter_list;
+
+	while (current_parameter != NULL)
+	{
+		write(draw_state->output_file,"    ",4);
+		
+		write(draw_state->output_file,current_parameter->name.name,current_parameter->name.name_length);
+		write(draw_state->output_file,spaces,function->max_param_name_length - current_parameter->name.name_length + 4);
+		
+		write(draw_state->output_file,current_parameter->type.name,current_parameter->type.name_length);
+		write(draw_state->output_file,spaces,function->max_param_type_length - current_parameter->type.name_length + 4);
+		
+		write(draw_state->output_file,current_parameter->brief.name,current_parameter->brief.name_length);
+			
+		write(draw_state->output_file,"\n",1);
+
+		current_parameter = current_parameter->next;
+	}
+		
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_api_prototype_function
+ * Desc : This function will output the prototype for the function.
+ *--------------------------------------------------------------------------------*/
+void	text_output_api_prototype_function(DRAW_STATE* draw_state, API_FUNCTION* function)
+{
+	unsigned int	space_length;
+	unsigned char	spaces[200];
+	API_PARAMETER*	current_parameter;
+
+	write(draw_state->output_file,function->return_type.name,function->return_type.name_length);
+	write(draw_state->output_file," ",1);
+	write(draw_state->output_file,function->name.name,function->name.name_length);
+	write(draw_state->output_file,"( ",2);
+
+	current_parameter = function->parameter_list;
+
+	space_length = function->return_type.name_length+3+function->name.name_length;
+
+	memset(spaces,' ',space_length);
+
+	while (current_parameter != NULL)
+	{
+		write(draw_state->output_file,current_parameter->type.name,current_parameter->type.name_length);
+		write(draw_state->output_file,spaces,function->max_param_type_length - current_parameter->type.name_length + 1);
+		write(draw_state->output_file,current_parameter->name.name,current_parameter->name.name_length);
+
+		if (current_parameter->next != NULL)
+		{
+			write(draw_state->output_file,",\n",sizeof(",\n")-1);
+			write(draw_state->output_file,spaces,space_length);
+		}
+
+		current_parameter = current_parameter->next;
+	}
+
+	write(draw_state->output_file,")\n\n",sizeof(")\n\n")-1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_api_description_function
+ * Desc : This function will output the description.
+ *--------------------------------------------------------------------------------*/
+void	text_output_api_description_function(DRAW_STATE* draw_state, API_FUNCTION* function)
+{
+	write(draw_state->output_file,"description:\n",sizeof("description:\n")-1);
+
+	if (function->description.name_length > 0)
+	{
+		write(draw_state->output_file,function->description.name,function->description.name_length);
+		write(draw_state->output_file,"\n",1);
+	}
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_api_name_function
+ * Desc : This function will output the function name.
+ *--------------------------------------------------------------------------------*/
+void	text_output_api_name_function(DRAW_STATE* draw_state, API_FUNCTION* function)
+{
+	write(draw_state->output_file,"function name: ",sizeof("function name: ")-1);
+	write(draw_state->output_file,function->name.name,function->name.name_length);
+	write(draw_state->output_file,"\n\n",2);
+}
 

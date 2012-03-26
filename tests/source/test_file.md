@@ -22,7 +22,7 @@ First Test (default)
 This is the simple test of the default API grouping. So we should be able to list the default items here.
 So, here is the default state_machine:
 
-[model:/default/state_machine]
+[model:/hello/state_machine]
 
 And, as the default should also have a sequence diagram, here is the default sequence diagram:
 
@@ -67,4 +67,36 @@ positive test set of files:
 [model:/test_one/state_machine]
 
 That is the basis of the tests.
+
+API tests
+---------
+
+Dump the full API for the default group:
+
+[model:/default/api]
+
+Now dump the API for the config_file_api group:
+
+[model:/config_file_api/api]
+
+Now dump the API for the test_2_group:
+
+[model:/test_2_group/api]
+
+Ok, Now dump only the functions from this group:
+
+[model:/test_2_group/api/function]
+
+And now we need to dump one function from this group: 
+
+[model:/config_file_api/api/function/DGTF_IF_AddString]
+
+Why not just the function name inline, from this group [model:/config_file_api/api/function/DGTF_IF_AddString/name] to prove that this can be done.
+
+[model:/config_file_api/api/function/DGTF_IF_AddString/name]
+
+And the prototype on its own:
+[model:/config_file_api/api/function/DGTF_IF_AddString/prototype]
+
+
 
