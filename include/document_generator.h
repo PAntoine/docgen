@@ -69,6 +69,8 @@
 #define INTERMEDIATE_RECORD_MULTILINE	( 8)
 #define INTERMEDIATE_RECORD_TYPE		( 9)
 #define INTERMEDIATE_RECORD_PAIR		(10)
+#define INTERMEDIATE_RECORD_START		(11)
+#define INTERMEDIATE_RECORD_END			(12)
 
 /* record format */
 #define RECORD_TYPE			(0)
@@ -84,6 +86,9 @@
 #define RECORD_FUNC_API_MASK	(0xC000)
 #define RECORD_FUNCTION_FLAG	(0xC000)
 #define RECORD_API_FLAG			(0x8000)
+
+#define RECORD_GROUP_TYPE		(0x01)	/** @brief	The record group contains a single type */
+#define RECORD_GROUP_RECORD		(0x02)	/** @brief	The record group contains a record structure */
 
 /*--------------------------------------------------------------------------------*
  * linker file format
@@ -166,7 +171,13 @@
 #define	LINKER_API_PARAMETER		(25)	/* a parameter to the api */
 #define	LINKER_API_RETURNS			(26)	/* a return value for the api */
 #define	LINKER_API_FUNCTION_END		(27)	/* the end of the function */
-#define	LINKER_API_END				(28)	/* the end of the api */
+#define LINKER_API_TYPE_START		(28)	/* the type start */
+#define LINKER_API_TYPE_FIELD		(29)	/* a field of the type */
+#define	LINKER_API_TYPE_END			(30)	/* the end of the type */
+#define LINKER_API_CONSTANTS_START	(31)	/* start of a constant group */
+#define LINKER_API_CONSTANT			(32)	/* a constant */
+#define	LINKER_API_CONSTANTS_END	(33)	/* the end of a constant group */
+#define	LINKER_API_END				(34)	/* the end of the api */
 
 /*--------------------------------------------------------------------------------*
  * general useful structures.
@@ -231,6 +242,19 @@ typedef struct
 	unsigned int	atom;
 	unsigned int	block;
 	unsigned int	func_api;
+	NAME			name;
+	NAME			type_type;
+	NAME			description;
+
+} ATOM_TYPE_TYPE;
+
+typedef struct
+{
+	unsigned int	type;
+	unsigned int	line;
+	unsigned int	atom;
+	unsigned int	block;
+	unsigned int	func_api;
 	unsigned int	group;
 	unsigned int	name_length;
 	unsigned char*	name;
@@ -263,15 +287,14 @@ typedef struct
 
 } ATOM_TYPE_PAIR;
 
-
 typedef struct
 {
 	unsigned int	type;
 	unsigned int	line;
 	unsigned int	atom;
 	unsigned int	block;
-	unsigned int	api;
 	unsigned int	func_api;
+	unsigned int	api;
 	unsigned char	number[4];
 
 } ATOM_TYPE_NUMBER;
@@ -281,6 +304,7 @@ typedef union
 	ATOM_TYPE_ANY		any;
 	ATOM_TYPE_NAME		name;
 	ATOM_TYPE_PAIR		pair;
+	ATOM_TYPE_TYPE		type;
 	ATOM_TYPE_NUMBER	number;
 	ATOM_TYPE_STRING	string;
 
@@ -325,6 +349,9 @@ typedef struct tag_atom_list
 #define	FLAG_SEQUENCE_RESPONDS	(0x0001)	/* the message responds to a message */
 
 #define	FLAG_SEQUENCE_WAITFOR	(0x0004)	/* the message waits for another message */
+
+#define	ATOM_TYPE_RECORD		(0x01)		/* records */
+#define ATOM_TYPE_FIELD			(0x02)		/* field */
 
 typedef struct tag_timeline TIMELINE;
 typedef struct tag_state STATE;
@@ -507,21 +534,59 @@ struct tag_function
 };
 
 /* api structures */
-typedef struct
+typedef struct tag_api_type_record
 {
-	unsigned int	unsued;		/* to stop warnings */
+	unsigned int	record_type;
+	unsigned int	depth;						/* is this a sub-type and how deep is it */
+	NAME			type_item;
+	NAME			name_value;
+	NAME			brief;
+
+	struct tag_api_type_record*	next;
+
+} API_TYPE_RECORD;
+
+typedef struct tag_api_type
+{
+	unsigned short		max_type_item_length;	/* largest size of type_item that we have added */
+	unsigned short		max_name_value_length;	/* the largest name_value that has been added */
+	unsigned int		depth;					/* how many sub-types does this API TYPE have */
+	NAME				name;
+	NAME				description;
+	API_TYPE_RECORD*	record_list;
+	API_TYPE_RECORD*	last_record;			/* the last record added to the record list */
+
+	struct tag_api_type*	next;
+
 } API_TYPE;
 
-typedef struct
+typedef struct tag_api_constant
 {
-	unsigned int	unsued;		/* to stop warnings */
-} API_DEFINE;
+	NAME			name;
+	NAME			value;
+	NAME			brief;
+
+	struct tag_api_constant*	next;
+} API_CONSTANT;
+
+typedef struct tag_api_constants
+{
+	unsigned short	max_name_length;
+	unsigned short	max_value_length;
+	NAME			name;
+	NAME			description;
+	API_CONSTANT*	last_constant;
+	API_CONSTANT*	constant_list;
+
+	struct tag_api_constants*	next;
+} API_CONSTANTS;
 
 typedef struct tag_api_parameter
 {
 	NAME			name;
 	NAME			type;
 	NAME			brief;
+
 	struct tag_api_parameter*	next;
 } API_PARAMETER;
 
@@ -544,14 +609,15 @@ typedef struct tag_api_function
 	NAME			description;
 	API_PARAMETER*	parameter_list;
 	API_RETURNS*	returns_list;
+	
 	struct tag_api_function*	next;
 } API_FUNCTION;
 
 typedef struct
 {
-	API_TYPE		type_list;			/* the list of types in this API*/
-	API_DEFINE		defines_list;		/* the list of defines in this API */
+	API_TYPE*		type_list;			/* the list of types in this API*/
 	API_FUNCTION*	function_list;		/* the list of functions in this API */
+	API_CONSTANTS*	constants_list;		/* the list of constant groups in this API */
 	GROUP*			group;				/* the owner group */	
 } API;
 
@@ -570,7 +636,6 @@ struct tag_group
 };
 
 /* decoder defines */
-
 typedef struct tag_deferred_list
 {
 	NODE*			node;
@@ -606,7 +671,9 @@ typedef struct
 	TIMELINE*			to_timeline;			/* the timeline that the message is specifically being sent to (optional) */
 	BLOCK_NAME*			trigger;				/* this is a reference to the trigger */
 	BLOCK_NAME*			triggers_list;			/* if this item causes a trigger */
+	API_TYPE*			api_type;				/* the block has a reference to a type */
 	API_FUNCTION*		api_function;			/* the block has a reference to an API */
+	API_CONSTANTS*		api_constants;			/* the block has a set of constants attached */
 	SOURCE_REFERENCE*	reference;				/* source reference of the block */
 	BLOCK_NAME			after;					/* the message follows the sending of this message */
 	BLOCK_NAME			author;					/* the author field of an api, file or function */
@@ -623,7 +690,7 @@ typedef struct
 
 typedef struct
 {
-	unsigned char	size;
+	unsigned short	size;
 	unsigned char*	buffer;
 
 } RECORD_BITS;
@@ -706,6 +773,14 @@ typedef struct
 	unsigned char	group_name[MAX_NAME_LENGTH];
 
 } INPUT_STATE;
+
+
+/*--------------------------------------------------------------------------------*
+ * shared functions
+ *--------------------------------------------------------------------------------*/
+void add_api_start_atom (ATOM_INDEX* list, unsigned char record_group_type, unsigned int group_id);
+void add_string_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* string, unsigned int string_length, unsigned int func_api );
+void add_api_type_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, NAME* type, NAME* name, NAME* description);
 
 /*--------------------------------------------------------------------------------*
  * Cross-Platform defines.

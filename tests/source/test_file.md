@@ -99,4 +99,25 @@ And the prototype on its own:
 [model:/config_file_api/api/function/DGTF_IF_AddString/prototype]
 
 
+API Tests Continued - Now dump the types
+----------------------------------------
+
+All the types in the system:
+[model:/*/api/type]
+
+All the types in default:
+[model:/default/api/type]
+
+All the types for test_1:
+[model:/test_1/api/type]
+
+and the one specific type (from test_1):
+[model:/test_1/api/type/DGTF_IF_SECTION_NAME]
+
+and the one specific type name only:
+[model:/test_1/api/type/DGTF_IF_SECTION_NAME/name]
+
+all the names of the types in the system:
+[model:/*/api/type/*/name]
+
 

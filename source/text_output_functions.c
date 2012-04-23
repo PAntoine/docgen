@@ -74,17 +74,20 @@ void	text_output_header(DRAW_STATE* draw_state, unsigned char* name, unsigned in
 		name = (unsigned char*) "default";
 	}
 
+#if 0	
 	if (draw_state->type == DIAGRAM_TYPE_STATE_MACHINE)
 	{
 		write(draw_state->output_file,"    state machine: ",sizeof("    state machine: ")-1);
+		write(draw_state->output_file,name,name_length);
+		write(draw_state->output_file,"\n",1);
 	}
-	else 
+	else if (draw_state->type == DIAGRAM_TYPE_SEQUENCE_DIAGRAM)
 	{
 		write(draw_state->output_file,"    sequence diagram: ",sizeof("    sequence diagram: ")-1);
+		write(draw_state->output_file,name,name_length);
+		write(draw_state->output_file,"\n",1);
 	}
-	
-	write(draw_state->output_file,name,name_length);
-	write(draw_state->output_file,"\n",1);
+#endif
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -482,4 +485,205 @@ void	text_output_api_name_function(DRAW_STATE* draw_state, API_FUNCTION* functio
 	write(draw_state->output_file,function->name.name,function->name.name_length);
 	write(draw_state->output_file,"\n\n",2);
 }
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_type_name_function
+ * Desc : This function will output the type name.
+ *--------------------------------------------------------------------------------*/
+void	text_output_type_name_function(DRAW_STATE* draw_state, API_TYPE* type)
+{
+	write(draw_state->output_file,"type name: ",sizeof("type name: ")-1);
+	write(draw_state->output_file,type->name.name,type->name.name_length);
+	write(draw_state->output_file,"\n\n",2);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_type_description_function
+ * Desc : This function will output the type description.
+ *--------------------------------------------------------------------------------*/
+void	text_output_type_description_function(DRAW_STATE* draw_state, API_TYPE* type)
+{
+	write(draw_state->output_file,"description:\n",sizeof("description:\n")-1);
+
+	if (type->description.name_length > 0)
+	{
+		write(draw_state->output_file,type->description.name,type->description.name_length);
+		write(draw_state->output_file,"\n",1);
+	}
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_type_records_function
+ * Desc : This function will output the records that make up the type.
+ *--------------------------------------------------------------------------------*/
+void	text_output_type_records_function(DRAW_STATE* draw_state, API_TYPE* type)
+{
+	unsigned int		max_length;
+	unsigned int		space_length;
+	unsigned char		spaces[200];
+	API_TYPE_RECORD*	current_record;
+
+	/* calculate the maximum number of spaces */
+	if (type->max_type_item_length < 4)
+		type->max_type_item_length = 4;
+	
+	if (type->max_name_value_length < 4)
+		type->max_name_value_length = 4;
+
+	if (type->max_type_item_length > type->max_name_value_length)
+		space_length = type->max_type_item_length + 4;
+	else
+		space_length = type->max_name_value_length + 4;
+
+	memset(spaces,' ',space_length<40?40:space_length);
+
+	/* Ok, write the title */
+	write(draw_state->output_file,"    Name",8);
+	write(draw_state->output_file,spaces,type->max_name_value_length - 8 + 4);
+	write(draw_state->output_file,"    Type",8);
+	write(draw_state->output_file,spaces,type->max_type_item_length - 8 + 4);
+	write(draw_state->output_file,"    Description",15);
+	write(draw_state->output_file,spaces,40);
+	write(draw_state->output_file,"\n",1);
+
+	/* now write the underline */
+	memset(spaces,'-',space_length<40?40:space_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,type->max_name_value_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,type->max_type_item_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,40);
+	write(draw_state->output_file,"\n",1);
+
+	/* clear the spaces for the write */
+	memset(spaces,' ',space_length);
+
+	current_record = type->record_list;
+
+	while (current_record != NULL)
+	{
+		/* don't print the special fields in the table - only the actual records */
+		if (current_record->name_value.name_length > 0 && current_record->type_item.name_length > 0)
+		{
+			write(draw_state->output_file,"    ",4);
+
+			write(draw_state->output_file,current_record->name_value.name,current_record->name_value.name_length);
+			write(draw_state->output_file,spaces,type->max_name_value_length - current_record->name_value.name_length + 4);
+
+			write(draw_state->output_file,current_record->type_item.name,current_record->type_item.name_length);
+			write(draw_state->output_file,spaces,type->max_type_item_length - current_record->type_item.name_length + 4);
+
+			write(draw_state->output_file,current_record->brief.name,current_record->brief.name_length);
+
+			write(draw_state->output_file,"\n",1);
+		}
+
+		current_record = current_record->next;
+	}
+		
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_constant_name_function
+ * Desc : This function will output the constant name.
+ *--------------------------------------------------------------------------------*/
+void	text_output_constant_name_function(DRAW_STATE* draw_state, API_CONSTANTS* constants)
+{
+	write(draw_state->output_file,"constant name: ",sizeof("constant name: ")-1);
+	write(draw_state->output_file,constants->name.name,constants->name.name_length);
+	write(draw_state->output_file,"\n\n",2);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_constants_description_function
+ * Desc : This function will output the constant description.
+ *--------------------------------------------------------------------------------*/
+void	text_output_constants_description_function(DRAW_STATE* draw_state, API_CONSTANTS* constants)
+{
+	write(draw_state->output_file,"description:\n",sizeof("description:\n")-1);
+
+	if (constants->description.name_length > 0)
+	{
+		write(draw_state->output_file,constants->description.name,constants->description.name_length);
+		write(draw_state->output_file,"\n",1);
+	}
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_constants_records_function
+ * Desc : This function will output the records that make up the constant.
+ *--------------------------------------------------------------------------------*/
+void	text_output_constants_records_function(DRAW_STATE* draw_state, API_CONSTANTS* constants)
+{
+	unsigned int	max_length;
+	unsigned int	space_length;
+	unsigned char	spaces[200];
+	API_CONSTANT*	current_constant;
+
+	/* calculate the maximum number of spaces */
+	if (constants->max_name_length < 4)
+		constants->max_name_length = 4;
+	
+	if (constants->max_value_length < 4)
+		constants->max_value_length = 4;
+
+	if (constants->max_name_length > constants->max_value_length)
+		space_length = constants->max_name_length + 4;
+	else
+		space_length = constants->max_value_length + 4;
+
+	memset(spaces,' ',space_length<40?40:space_length);
+
+	/* Ok, write the title */
+	write(draw_state->output_file,"    Name",8);
+	write(draw_state->output_file,spaces,constants->max_name_length - 8 + 4);
+	write(draw_state->output_file,"    value",9);
+	write(draw_state->output_file,spaces,constants->max_value_length - 5 + 4);
+	write(draw_state->output_file,"    Description",15);
+	write(draw_state->output_file,spaces,40);
+	write(draw_state->output_file,"\n",1);
+
+	/* now write the underline */
+	memset(spaces,'-',space_length<40?40:space_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,constants->max_name_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,constants->max_value_length);
+	write(draw_state->output_file,"    ",4);
+	write(draw_state->output_file,spaces,40);
+	write(draw_state->output_file,"\n",1);
+
+	/* clear the spaces for the write */
+	memset(spaces,' ',space_length);
+
+	current_constant = constants->constant_list;
+
+	while (current_constant != NULL)
+	{
+		/* don't print the special fields in the table - only the actual records */
+		if (current_constant->name.name_length > 0 && current_constant->value.name_length > 0)
+		{
+			write(draw_state->output_file,"    ",4);
+
+			write(draw_state->output_file,current_constant->name.name,current_constant->name.name_length);
+			write(draw_state->output_file,spaces,constants->max_name_length - current_constant->name.name_length + 4);
+
+			write(draw_state->output_file,current_constant->value.name,current_constant->value.name_length);
+			write(draw_state->output_file,spaces,constants->max_value_length - current_constant->value.name_length + 4);
+
+			write(draw_state->output_file,current_constant->brief.name,current_constant->brief.name_length);
+
+			write(draw_state->output_file,"\n",1);
+		}
+
+		current_constant = current_constant->next;
+	}
+		
+	write(draw_state->output_file,"\n",1);
+}
+
 

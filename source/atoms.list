@@ -6,8 +6,10 @@ brief
 call
 condition
 copyright
-defines
-end_define
+constants
+end_constants
+globals
+end_globals
 examples
 file
 function
@@ -27,6 +29,7 @@ see_also
 send
 state
 synopsis
+tag
 timeline
 to
 trigger

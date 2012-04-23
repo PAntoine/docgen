@@ -266,6 +266,58 @@ API_FUNCTION*	find_api_function(unsigned char* name, unsigned int name_length, G
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_type_record
+ * Desc : This function will add a type record to the api type.
+ *--------------------------------------------------------------------------------*/
+void	add_api_type_record(API_TYPE* api_type, unsigned int record_type,NAME* name, NAME* type,  NAME* brief)
+{
+	API_TYPE_RECORD*	new_record = malloc(sizeof(API_TYPE_RECORD));
+
+	/* initialise the new record */
+	new_record->record_type = record_type;
+	copy_name(type,&new_record->type_item);
+	copy_name(name,&new_record->name_value);
+	copy_name(brief,&new_record->brief);
+
+	/* add it to the record list */
+	if (api_type->record_list == NULL)
+	{
+		api_type->record_list = new_record;
+	}
+	else
+	{
+		api_type->last_record->next = new_record;
+	}
+
+	api_type->last_record = new_record;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_constant
+ * Desc : This function will add a constant to the api constants group list.
+ *--------------------------------------------------------------------------------*/
+void	add_api_constant(API_CONSTANTS* api_constant, NAME* name, NAME* value)
+{
+	API_CONSTANT*	new_record = malloc(sizeof(API_CONSTANT));
+
+	/* initialise the new record */
+	copy_name(name,&new_record->name);
+	copy_name(value,&new_record->value);
+
+	/* add it to the record list */
+	if (api_constant->constant_list == NULL)
+	{
+		api_constant->constant_list = new_record;
+	}
+	else
+	{
+		api_constant->last_constant->next = new_record;
+	}
+
+	api_constant->last_constant = new_record;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_api_function
  * Desc : This function will add a named function in the list of functions.
  *--------------------------------------------------------------------------------*/
@@ -476,6 +528,118 @@ unsigned int	add_block_node(BLOCK_NODE* block, GROUP** local_group_list)
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_block_type
+ * Desc : This function will add a type block to the diagram tree.
+ *--------------------------------------------------------------------------------*/
+unsigned int	add_block_type(BLOCK_NODE* block, GROUP** local_group_list)
+{
+	GROUP*			owing_group = NULL;
+	API_TYPE*		current_type;
+	unsigned int	result = EC_OK;
+	
+	if (block->description.name_length > 0)
+	{
+		block->api_type->description.name = block->description.name;
+		block->api_type->description.name_length = block->description.name_length;
+	}
+
+	if (block->group == NULL)
+	{
+		/* if no group defined, default to the default */
+		block->group = local_group_list[0];
+	}
+
+	owing_group = block->group;
+
+	/* create the API group if required */
+	if (owing_group->api == NULL)
+	{
+		owing_group->api = calloc(1,sizeof(API));
+		owing_group->api->group = block->group;
+	}
+
+	/* move the type to the correct API */
+	if (owing_group->api->type_list == NULL)
+	{
+		owing_group->api->type_list = block->api_type;
+	}
+	else
+	{
+		current_type = owing_group->api->type_list;
+
+		while (current_type != NULL)
+		{
+			if (current_type->next == NULL)
+			{
+				current_type->next = block->api_type;
+				block->api_type->next = NULL;
+				break;
+			}
+
+			current_type = current_type->next;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_block_constants
+ * Desc : This function will add a constants block to the diagram tree.
+ *--------------------------------------------------------------------------------*/
+unsigned int	add_block_constants(BLOCK_NODE* block, GROUP** local_group_list)
+{
+	GROUP*			owing_group = NULL;
+	API_CONSTANTS*	current_constants;
+	unsigned int	result = EC_OK;
+	
+	if (block->description.name_length > 0)
+	{
+		block->api_type->description.name = block->description.name;
+		block->api_type->description.name_length = block->description.name_length;
+	}
+
+	if (block->group == NULL)
+	{
+		/* if no group defined, default to the default */
+		block->group = local_group_list[0];
+	}
+
+	owing_group = block->group;
+
+	/* create the API group if required */
+	if (owing_group->api == NULL)
+	{
+		owing_group->api = calloc(1,sizeof(API));
+		owing_group->api->group = block->group;
+	}
+
+	/* move the type to the correct API */
+	if (owing_group->api->constants_list == NULL)
+	{
+		owing_group->api->constants_list = block->api_constants;
+	}
+	else
+	{
+		current_constants = owing_group->api->constants_list;
+
+		while (current_constants != NULL)
+		{
+			if (current_constants->next == NULL)
+			{
+				current_constants->next = block->api_constants;
+				block->api_constants->next = NULL;
+				break;
+			}
+
+			current_constants = current_constants->next;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_block_function
  * Desc : This function will add a function block.
  *--------------------------------------------------------------------------------*/
@@ -639,7 +803,8 @@ unsigned int	add_block_api(BLOCK_NODE* block, GROUP** local_group_list)
 					if (current_parameter->brief.name_length > 0)
 					{
 						/* already has a parameter */
-						printf("ERROR: duplicate\n");
+						result = EC_DUPLICATE_PARAMETER;
+						raise_warning(block->line_number,result,current_parameter->brief.name,NULL);
 					}
 					else
 					{
@@ -820,6 +985,14 @@ unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** l
 	{
 		result = add_block_node(block,local_group_list);
 	}
+	else if (block->api_constants != NULL)
+	{
+		result = add_block_constants(block,local_group_list);
+	}
+	else if (block->api_type != NULL)
+	{
+		result = add_block_type(block,local_group_list);
+	}
 	else if (block->api_function != NULL || (block->flags & FLAG_IN_FUNCTION) == FLAG_IN_FUNCTION)
 	{
 		/* block can both be an API and a function */
@@ -965,13 +1138,27 @@ unsigned int	add_pair_to_block (	GROUP**			local_group_list,
 	switch(record[RECORD_ATOM])
 	{
 		case ATOM_PARAMETER:
-				node->num_parameters++;
-				add_to_pair_list(&node->parameters,&name,&string);
+			node->num_parameters++;
+			add_to_pair_list(&node->parameters,&name,&string);
 			break;
 
 		case ATOM_RETURNS:
-				node->num_returns++;
-				add_to_pair_list(&node->returns,&name,&string);
+			node->num_returns++;
+			add_to_pair_list(&node->returns,&name,&string);
+			break;
+
+		case ATOM_RECORD:
+			if (node->api_constants != NULL)
+			{
+				add_api_constant(node->api_constants,&name,&string);
+			}
+			break;
+
+		case ATOM_TYPE:
+			if (node->api_type != NULL)
+			{
+				add_api_type_record(node->api_type,ATOM_TYPE_FIELD,&name,&string,NULL);
+			}
 			break;
 
 		default:
@@ -979,6 +1166,126 @@ unsigned int	add_pair_to_block (	GROUP**			local_group_list,
 			result = EC_UNKNOWN_ATOM;
 			raise_warning(line_number,result,NULL,NULL);
 			break;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_atom_to_constant
+ * Desc : This function will add the atom to the block. 
+  *--------------------------------------------------------------------------------*/
+unsigned int	add_atom_to_constant(	GROUP** 		local_group_list,
+										FUNCTION**		local_function_list,
+										API_FUNCTION**	local_api_function_list,
+										BLOCK_NODE*		node,
+										unsigned char*	record,
+										unsigned char*	payload,
+										unsigned int	payload_length )
+{
+	NAME			temp;
+	unsigned int	result = EC_OK;
+
+	temp.name = payload;
+	temp.name_length = payload_length;
+
+	switch(record[RECORD_ATOM])
+	{
+		case ATOM_DESC:
+		case ATOM_DESCRIPTION:
+			node->api_constants->description.name = realloc(node->api_constants->description.name,
+															node->api_constants->description.name_length+payload_length);
+			memcpy(&node->api_constants->description.name[node->api_constants->description.name_length],payload,payload_length);
+			node->api_constants->description.name_length += payload_length;
+			break;
+
+		case ATOM_BRIEF:
+			if (node->api_constants->last_constant != NULL)
+			{
+				if (node->api_constants->last_constant->brief.name_length == 0)
+				{
+					copy_name(&temp,&node->api_constants->last_constant->brief);
+				}
+				else
+				{
+					printf("ERROR: double description\n");
+				}
+			}
+			else
+			{
+				printf("ERROR: brief without a type\n");
+			}
+			break;
+
+		default:
+			printf("constant: unknown atom: %02x %d\n",record[RECORD_ATOM],record[RECORD_ATOM]);
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_atom_to_type
+ * Desc : This function will add the atom to the block. 
+  *--------------------------------------------------------------------------------*/
+unsigned int	add_atom_to_type(	GROUP** 		local_group_list,
+									FUNCTION**		local_function_list,
+									API_FUNCTION**	local_api_function_list,
+									BLOCK_NODE*		node,
+									unsigned char*	record,
+									unsigned char*	payload,
+									unsigned int	payload_length )
+{
+	NAME			temp;
+	unsigned int	result = EC_OK;
+
+	temp.name = payload;
+	temp.name_length = payload_length;
+
+	switch(record[RECORD_ATOM])
+	{
+		case ATOM_NAME:
+			if (node->api_type->depth > 0)
+			{
+				add_api_type_record(node->api_type,ATOM_NAME,&temp,NULL,NULL);
+				node->api_type->depth--;
+			}
+			else
+			{
+				copy_name(&temp,&node->api_type->name);
+				node->api_type->depth--;
+			}
+			break;
+
+		case ATOM_RECORD:
+			node->api_type->depth++;
+			add_api_type_record(node->api_type,ATOM_RECORD,NULL,&temp,NULL);
+			break;
+
+		case ATOM_TYPE:
+			add_api_type_record(node->api_type,ATOM_TYPE,NULL,&temp,NULL);
+			break;
+
+		case ATOM_BRIEF:
+			if (node->api_type->last_record != NULL)
+			{
+				if (node->api_type->last_record->brief.name_length == 0)
+				{
+					copy_name(&temp,&node->api_type->last_record->brief);
+				}
+				else
+				{
+					printf("ERROR: double description\n");
+				}
+			}
+			else
+			{
+				printf("ERROR: brief without a type\n");
+			}
+			break;
+
+		default:
+			printf("type: unknown atom: %02x %d\n",record[RECORD_ATOM],record[RECORD_ATOM]);
 	}
 
 	return result;
@@ -1048,6 +1355,7 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 			node->action.name_length += payload_length;
 			break;
 
+		case ATOM_DESC:
 		case ATOM_DESCRIPTION:
 			node->description.name = realloc(node->description.name,node->description.name_length+payload_length);
 			memcpy(&node->description.name[node->description.name_length],payload,payload_length);
@@ -1321,6 +1629,10 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 		case ATOM_REPEATS:
 			break;
 
+		case ATOM_COPYRIGHT:
+			printf("ignoring copyright\n");
+			break;
+
 		default:
 			printf("++ atom: %d %d\n",record[RECORD_ATOM],ATOM_DESCRIPTION);
 			line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
@@ -1366,7 +1678,7 @@ unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, N
 		function->parameter_list = new_parameter;
 	}
 	else
-		printf("unkown\n");
+		printf("unknown:%d \n",atom);
 
 	return result;
 }
@@ -1429,6 +1741,7 @@ unsigned int	process_input(const char* filename)
 	int				infile;
 	int				bytes_read;
 	unsigned int 	result = 0;
+	unsigned int	in_api_group = 0;
 	unsigned int	line_number = 0;
 	unsigned int	num_groups = 1;
 	unsigned int	num_functions = 1;
@@ -1506,8 +1819,9 @@ unsigned int	process_input(const char* filename)
 					new_block_number = ((((unsigned int)record[RECORD_BLOCK_NUM]) << 8) | record[RECORD_BLOCK_NUM+1]);
 
 					/* check to see if the block number changes */
-					if (new_block_number != block_node.block_number)
+					if (new_block_number != block_node.block_number && !in_api_group)
 					{
+						/* ignore all blocks that are found while in a type */
 						if (block_node.line_number != 0)
 						{
 							/* add the block to the output */
@@ -1535,6 +1849,25 @@ unsigned int	process_input(const char* filename)
 								{
 									current_api_function = MAX_GROUPS_PER_FILE;
 								}
+								else if (record[RECORD_ATOM] == ATOM_CONSTANTS)
+								{
+									/* Start the CONSTANT grouping */
+									if (block_node.api_constants != NULL)
+									{
+										result = EC_MULTIPLE_CONSTANTS_REQUEST_WITHOUT_END;
+										raise_warning(line_number,result,NULL,NULL);
+									}
+									else
+									{
+										block_node.api_constants = calloc(1,sizeof(API_CONSTANTS));
+										in_api_group = 1;
+									}
+								}
+								else if (record[RECORD_ATOM] == ATOM_END_CONSTANTS)
+								{
+									/* End the CONSTANT grouping */
+									in_api_group = 0;
+								}
 								break;
 
 							case INTERMEDIATE_RECORD_FUNCTION:
@@ -1555,7 +1888,8 @@ unsigned int	process_input(const char* filename)
 
 								if (current_api_function != MAX_GROUPS_PER_FILE)
 								{
-									printf("ERROR: faile nested functions\n");
+									result = EC_NESTED_FUNCTION_DEFINITIONS_NOT_ALLOWED;
+									raise_warning(line_number,result,NULL,NULL);
 								}
 
 								if ((local_api_functions[num_api_functions] = find_api_function(record_buffer,record_size,local_group[group])) == NULL)
@@ -1570,12 +1904,19 @@ unsigned int	process_input(const char* filename)
 							case INTERMEDIATE_RECORD_TYPE:
 								result = decode_type(record_buffer,record_size,&type,&name,&brief);
 								
-								if (current_api_function != INVALID_ITEM)
+								if (block_node.api_type != NULL)
+								{
+									add_api_type_record(block_node.api_type,ATOM_TYPE_RECORD,&type,&name,&brief);
+								}
+								else if (current_api_function != INVALID_ITEM)
 								{
 									decode_api_function_type(local_api_functions[current_api_function],record[RECORD_ATOM],&type,&name,&brief);
 								}
 								else
-									printf("ERROR: not an api record\n");
+								{
+									result = EC_TYPE_DEFINITION_IN_INVALID_PLACE;
+									raise_warning(line_number,result,NULL,NULL);
+								}
 								break;
 
 							case INTERMEDIATE_RECORD_GROUP:
@@ -1594,13 +1935,36 @@ unsigned int	process_input(const char* filename)
 							case INTERMEDIATE_RECORD_NAME:
 							case INTERMEDIATE_RECORD_STRING:
 							case INTERMEDIATE_RECORD_MULTILINE:
-								add_atom_to_block(	local_group,
-													local_functions,
-													local_api_functions,
-													&block_node,
-													record,
-													record_buffer,
-													record_size);
+								if (block_node.api_constants != NULL)
+								{
+									add_atom_to_constant( 	local_group,
+															local_functions,
+															local_api_functions,
+															&block_node,
+															record,
+															record_buffer,
+															record_size);
+								}
+								else if (block_node.api_type != NULL)
+								{
+									add_atom_to_type( 	local_group,
+														local_functions,
+														local_api_functions,
+														&block_node,
+														record,
+														record_buffer,
+														record_size);
+								}
+								else
+								{
+									add_atom_to_block(	local_group,
+														local_functions,
+														local_api_functions,
+														&block_node,
+														record,
+														record_buffer,
+														record_size);
+								}
 								break;
 
 							case INTERMEDIATE_RECORD_NUMBERIC:
@@ -1621,6 +1985,23 @@ unsigned int	process_input(const char* filename)
 													record,
 													record_buffer,
 													record_size);
+								break;
+
+							case INTERMEDIATE_RECORD_START:
+								group = (((unsigned int)(record[RECORD_GROUP]) << 8) | record[RECORD_GROUP+1]);
+								
+								if (group == DEFAULT_GROUP)
+								{
+									group = 0;
+								}
+								
+								block_node.api_type = calloc(1,sizeof(API_TYPE));
+								in_api_group = 1;
+								break;
+
+							case INTERMEDIATE_RECORD_END:
+								/*TODO: fix this: block_node.api_type = NULL; */
+								in_api_group = 0;
 								break;
 
 							default:
@@ -2929,10 +3310,15 @@ void	write_pair_record(unsigned char type, OUTPUT_FILE* file, NAME* value, NAME*
  *--------------------------------------------------------------------------------*/
 void	output_api(OUTPUT_FILE* outfile, API* api)
 {
-	NAME			empty = {NULL,0};
-	API_RETURNS*	current_returns;
-	API_FUNCTION*	current_function;
-	API_PARAMETER*	current_parameter;
+	NAME				empty = {NULL,0};
+	NAME*				group_name;
+	API_TYPE*			current_type;
+	API_RETURNS*		current_returns;
+	API_FUNCTION*		current_function;
+	API_CONSTANT*		current_constant;
+	API_CONSTANTS*		current_constants;
+	API_PARAMETER*		current_parameter;
+	API_TYPE_RECORD*	current_type_record;
 
 	/* let the file know that we are starting a new api */
 	write_string_record(LINKER_API_START,outfile,api->group->name,api->group->name_length);
@@ -2969,6 +3355,56 @@ void	output_api(OUTPUT_FILE* outfile, API* api)
 		write_empty_record(LINKER_API_FUNCTION_END,outfile);
 
 		current_function = current_function->next;
+	}
+
+	/* now output the types for the API */
+	current_type = api->type_list;
+
+	while (current_type != NULL)
+	{
+		write_pair_record(LINKER_API_TYPE_START,outfile,&current_type->name,&current_type->description);
+		
+		current_type_record = current_type->record_list;
+
+		while (current_type_record != NULL)
+		{
+			write_type_record(	LINKER_API_TYPE_FIELD,
+								outfile,
+								&current_type_record->type_item,
+								&current_type_record->name_value,
+								&current_type_record->brief);
+
+			current_type_record = current_type_record->next;
+		}
+
+		write_empty_record(LINKER_API_TYPE_END,outfile);
+
+		current_type = current_type->next;
+	}
+
+	/* now output the constantss for the API */
+	current_constants = api->constants_list;
+
+	while (current_constants != NULL)
+	{
+		write_pair_record(LINKER_API_CONSTANTS_START,outfile,&current_constants->name,&current_constants->description);
+		
+		current_constant = current_constants->constant_list;
+
+		while (current_constant != NULL)
+		{
+			write_type_record(	LINKER_API_CONSTANT,
+								outfile,
+								&current_constant->name,
+								&current_constant->value,
+								&current_constant->brief);
+
+			current_constant = current_constant->next;
+		}
+
+		write_empty_record(LINKER_API_CONSTANTS_END,outfile);
+
+		current_constants = current_constants->next;
 	}
 
 	/* Ok, we have finished outputting the API */

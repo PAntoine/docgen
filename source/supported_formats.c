@@ -42,7 +42,11 @@ OUTPUT_FORMATS	output_formats[] =
 							text_output_timelines,text_output_message,
 							text_output_states,	text_output_start_state,text_output_transition,text_output_end_state,
 							text_output_api_name_function, text_output_api_description_function, text_output_api_prototype_function,
-							text_output_api_parameters_function, text_output_api_action_function, text_output_api_returns_function}
+							text_output_api_parameters_function, text_output_api_action_function, text_output_api_returns_function,
+							text_output_type_name_function, text_output_type_description_function, text_output_type_records_function,
+							text_output_constants_records_function, text_output_constants_description_function, 
+							text_output_constant_name_function
+	}
 
 #if 0
 	{ "dot",dot_output_header,dot_output_footer,dot_output_timelines,dot_output_message,dot_output_states,dot_output_transition}

@@ -79,7 +79,18 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"INTERNAL ERROR: invalid parameter",
 	"INTERNAL ERROR: Parameter Added - you should never read this.",
 	"Duplicate field in definition",
-	"Undefined API referenced"
+	"Undefined API referenced",
+	"Duplicate parameter defined in function",
+	"Type defined in an invalid place",
+	"Output request has a bad name format.",
+	"atom must be defined within an API function",
+	"duplicate name defined",
+	"duplicate function defined",
+	"multiple type requests without a type in between",
+	"undefined type referenced",
+	"multiple @constants requests without @end_constants",
+	"@end_constants without a @constants",
+	"undefined constant group referenced"
 };
 	
 /*----- FUNCTION -----------------------------------------------------------------*

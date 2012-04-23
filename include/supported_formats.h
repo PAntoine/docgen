@@ -60,22 +60,35 @@ typedef struct
 } API_PARTS;
 
 /* the major parts */
-#define	OUTPUT_API_MULTIPLE				((unsigned int) (0x80000000))
+#define	OUTPUT_API_MULTIPLE					((unsigned int) (0x80000000))
 
 /* what to dump */
-#define	OUTPUT_API_FUNCTIONS			((unsigned int) (0x08000000))
-#define	OUTPUT_API_TYPES				((unsigned int) (0x04000000))
-#define	OUTPUT_API_DEFINES				((unsigned int) (0x02000000))
-#define	OUTPUT_API_ALL					((unsigned int) (0x0E000000))
+#define	OUTPUT_API_FUNCTIONS				((unsigned int) (0x08000000))
+#define	OUTPUT_API_TYPES					((unsigned int) (0x04000000))
+#define	OUTPUT_API_CONSTANTS				((unsigned int) (0x02000000))
+#define	OUTPUT_API_GLOBALS					((unsigned int) (0x01000000))
+#define	OUTPUT_API_ALL						((unsigned int) (0x0F000000))
 
 /* the parts of a function description */
-#define	OUTPUT_API_FUNCTION_NAME		((unsigned int) (0x00000001))
-#define	OUTPUT_API_FUNCTION_DESCRIPTION	((unsigned int) (0x00000002))
-#define	OUTPUT_API_FUNCTION_PROTOTYPE	((unsigned int) (0x00000004))
-#define	OUTPUT_API_FUNCTION_PARAMETERS	((unsigned int) (0x00000008))
-#define	OUTPUT_API_FUNCTION_ACTION		((unsigned int) (0x00000010))
-#define	OUTPUT_API_FUNCTION_RETURNS		((unsigned int) (0x00000020))
-#define OUTPUT_API_FUNCTION_ALL_PARTS	((unsigned int) (0x0000003F))
+#define	OUTPUT_API_FUNCTION_NAME			((unsigned int) (0x00000001))
+#define	OUTPUT_API_FUNCTION_DESCRIPTION		((unsigned int) (0x00000002))
+#define	OUTPUT_API_FUNCTION_PROTOTYPE		((unsigned int) (0x00000004))
+#define	OUTPUT_API_FUNCTION_PARAMETERS		((unsigned int) (0x00000008))
+#define	OUTPUT_API_FUNCTION_ACTION			((unsigned int) (0x00000010))
+#define	OUTPUT_API_FUNCTION_RETURNS			((unsigned int) (0x00000020))
+#define OUTPUT_API_FUNCTION_ALL_PARTS		((unsigned int) (0x0000003F))
+
+/* the parts of the types */
+#define OUTPUT_API_TYPE_NAME				((unsigned int)	(0x00000100))
+#define OUTPUT_API_TYPE_RECORDS				((unsigned int)	(0x00000200))
+#define OUTPUT_API_TYPE_DESCRIPTION			((unsigned int)	(0x00000400))
+#define OUTPUT_API_TYPE_ALL_PARTS			((unsigned int) (0x00000F00))
+
+/* the parts of the constants */
+#define OUTPUT_API_CONSTANTS_NAME			((unsigned int)	(0x00001000))
+#define OUTPUT_API_CONSTANTS_CONSTANT		((unsigned int)	(0x00002000))
+#define OUTPUT_API_CONSTANTS_DESCRIPTION	((unsigned int)	(0x00004000))
+#define OUTPUT_API_CONSTANTS_ALL_PARTS		((unsigned int) (0x0000F000))
 
 /*--------------------------------------------------------------------------------*
  * Function Pointer Types for the output functions.
@@ -103,6 +116,14 @@ typedef void			(*OUTPUT_API_PARAMETERS_FUNCTION)	(DRAW_STATE* draw_state, API_FU
 typedef void			(*OUTPUT_API_ACTION_FUNCTION)		(DRAW_STATE* draw_state, API_FUNCTION* function);
 typedef void			(*OUTPUT_API_RETURNS_FUNCTION)		(DRAW_STATE* draw_state, API_FUNCTION* function);
 
+typedef void			(*OUTPUT_TYPE_NAME_FUNCTION)		(DRAW_STATE* draw_state, API_TYPE* type);
+typedef void			(*OUTPUT_TYPE_DESCRIPTION_FUNCTION)	(DRAW_STATE* draw_state, API_TYPE* type);
+typedef void			(*OUTPUT_TYPE_RECORDS_FUNCTION)		(DRAW_STATE* draw_state, API_TYPE* type);
+
+typedef void			(*OUTPUT_CONSTANTS_RECORDS_FUNCTION)	(DRAW_STATE* draw_state, API_CONSTANTS* constants);
+typedef void			(*OUTPUT_CONSTANTS_DESCRIPTION_FUNCTION)(DRAW_STATE* draw_state, API_CONSTANTS* constants);
+typedef void			(*OUTPUT_CONSTANT_NAME_FUNCTION)		(DRAW_STATE* draw_state, API_CONSTANTS* constants);
+
 typedef struct
 {
 	unsigned char*				format_name;
@@ -126,12 +147,22 @@ typedef struct
 	OUTPUT_END_STATE_FUNCTION 	output_end_state;
 
 	/* API function functions */
-	OUTPUT_API_NAME_FUNCTION		output_function_name;
-	OUTPUT_API_DESCRIPTION_FUNCTION	output_function_description;
-	OUTPUT_API_PROTOTYPE_FUNCTION	output_function_prototype;
-	OUTPUT_API_PARAMETERS_FUNCTION	output_function_parameters;
-	OUTPUT_API_ACTION_FUNCTION		output_function_action;
-	OUTPUT_API_RETURNS_FUNCTION		output_function_returns;
+	OUTPUT_API_NAME_FUNCTION			output_function_name;
+	OUTPUT_API_DESCRIPTION_FUNCTION		output_function_description;
+	OUTPUT_API_PROTOTYPE_FUNCTION		output_function_prototype;
+	OUTPUT_API_PARAMETERS_FUNCTION		output_function_parameters;
+	OUTPUT_API_ACTION_FUNCTION			output_function_action;
+	OUTPUT_API_RETURNS_FUNCTION			output_function_returns;
+
+	/* API type functions */
+	OUTPUT_TYPE_NAME_FUNCTION			output_type_name;
+	OUTPUT_TYPE_DESCRIPTION_FUNCTION	output_type_description;
+	OUTPUT_TYPE_RECORDS_FUNCTION		output_type_records;
+
+	/* API constants functions */
+	OUTPUT_CONSTANTS_RECORDS_FUNCTION		output_constant_records;
+	OUTPUT_CONSTANTS_DESCRIPTION_FUNCTION	output_constant_description;
+	OUTPUT_CONSTANT_NAME_FUNCTION			output_constant_name;
 
 } OUTPUT_FORMATS;
 
@@ -148,7 +179,6 @@ typedef struct
 struct tag_draw_state
 {
 	int				output_file;
-	unsigned int	type;
 	unsigned int	offset;
 	unsigned int	buffer_size;
 	unsigned int	format;
@@ -190,6 +220,12 @@ void			text_output_api_prototype_function(DRAW_STATE* draw_state, API_FUNCTION* 
 void			text_output_api_parameters_function(DRAW_STATE* draw_state, API_FUNCTION* function);
 void			text_output_api_action_function(DRAW_STATE* draw_state, API_FUNCTION* function);
 void			text_output_api_returns_function(DRAW_STATE* draw_state, API_FUNCTION* function);
+void			text_output_type_name_function(DRAW_STATE* draw_state, API_TYPE* type);
+void			text_output_type_description_function(DRAW_STATE* draw_state, API_TYPE* type);
+void			text_output_type_records_function(DRAW_STATE* draw_state, API_TYPE* type);
+void			text_output_constants_records_function(DRAW_STATE* draw_state, API_CONSTANTS* constants);
+void			text_output_constants_description_function(DRAW_STATE* draw_state, API_CONSTANTS* constants);
+void			text_output_constant_name_function(DRAW_STATE* draw_state, API_CONSTANTS* constants);
 
 /*--------------------------------------------------------------------------------*
  * DOT format function types

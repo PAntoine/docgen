@@ -364,7 +364,11 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 	
 	if (name_length == 0)
 	{
-		api_parts->flags = (OUTPUT_API_ALL | OUTPUT_API_MULTIPLE | OUTPUT_API_FUNCTION_ALL_PARTS);
+		api_parts->flags = (OUTPUT_API_ALL					| 
+							OUTPUT_API_MULTIPLE				| 
+							OUTPUT_API_FUNCTION_ALL_PARTS	| 
+							OUTPUT_API_TYPE_ALL_PARTS		|
+							OUTPUT_API_CONSTANTS_ALL_PARTS);
 		api_parts->name.name = NULL;
 		api_parts->name.name_length = 0;
 	}
@@ -381,21 +385,29 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 			{
 				case ATOM_FUNCTION:
 					api_parts->flags = OUTPUT_API_FUNCTIONS;
+					api_parts->flags |= OUTPUT_API_FUNCTION_ALL_PARTS;
 					pos += atoms_get_length(ATOM_FUNCTION);
 					break;
 
 				case ATOM_TYPE:
 					api_parts->flags = OUTPUT_API_TYPES;
+					api_parts->flags |= OUTPUT_API_TYPE_ALL_PARTS;
 					pos += atoms_get_length(ATOM_TYPE);
 					break;
 
-				case ATOM_DEFINES:
-					api_parts->flags = OUTPUT_API_DEFINES;
-					pos += atoms_get_length(ATOM_DEFINES);
+				case ATOM_CONSTANTS:
+					api_parts->flags = OUTPUT_API_CONSTANTS;
+					pos += atoms_get_length(ATOM_CONSTANTS);
 					break;
 
+				case ATOM_GLOBALS:
+					api_parts->flags = OUTPUT_API_GLOBALS;
+					pos += atoms_get_length(ATOM_GLOBALS);
+					break;
+
+
 				default:
-					printf("ERROR: bad name: %s\n",name);
+					raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 					result = 0;
 			}
 		}
@@ -404,11 +416,10 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 		if (pos < name_length)
 		{
 			api_parts->name.name = &name[pos+1];
-			api_parts->flags |= OUTPUT_API_FUNCTION_ALL_PARTS;
 
 			if (name[pos] != '/')
 			{
-				printf("ERROR: bad name\n");
+				raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 				result  = 0;
 			}
 			else if (name[pos] == '*')
@@ -427,51 +438,111 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 				name_end = pos;
 			}
 		}
+		else
+		{
+			/* if not name is specified then output all the things */
+			api_parts->flags |= OUTPUT_API_MULTIPLE;
+		}
 
+		/* read the sub-parts */
 		api_parts->name.name_length = name_end - name_start;
 
 		if (pos < name_length)
 		{
 			if (name[pos] != '/')
 			{
-				printf("ERROR: failed bad format\n");
+				raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 				result = 0;
 			}
 			else
 			{
-				api_parts->flags &= ~OUTPUT_API_FUNCTION_ALL_PARTS;
+				api_parts->flags &= ~(OUTPUT_API_FUNCTION_ALL_PARTS | OUTPUT_API_TYPE_ALL_PARTS);
 
-				switch(atoms_check_word(&name[pos+1]))
+				if (api_parts->flags == OUTPUT_API_FUNCTIONS)
 				{
-					case 	ATOM_NAME:
-						pos += atoms_get_length(ATOM_NAME);
-						api_parts->flags |= OUTPUT_API_FUNCTION_NAME;
-						break;  	
-					case 	ATOM_ACTION:
-						pos += atoms_get_length(ATOM_ACTION);
-						api_parts->flags |= OUTPUT_API_FUNCTION_ACTION;
-						break;  	
-					case 	ATOM_RETURNS:
-						pos += atoms_get_length(ATOM_RETURNS);
-						api_parts->flags |= OUTPUT_API_FUNCTION_RETURNS;
-						break;  	
-					case 	ATOM_PROTOTYPE:
-						pos += atoms_get_length(ATOM_PROTOTYPE);
-						api_parts->flags |= OUTPUT_API_FUNCTION_PROTOTYPE;
-						break;
+					switch(atoms_check_word(&name[pos+1]))
+					{
+						case 	ATOM_NAME:
+							pos += atoms_get_length(ATOM_NAME);
+							api_parts->flags |= OUTPUT_API_FUNCTION_NAME;
+							break;
 
-					case 	ATOM_PARAMETERS:
-						pos += atoms_get_length(ATOM_PARAMETERS);
-						api_parts->flags |= OUTPUT_API_FUNCTION_PARAMETERS;
-						break;
+						case 	ATOM_ACTION:
+							pos += atoms_get_length(ATOM_ACTION);
+							api_parts->flags |= OUTPUT_API_FUNCTION_ACTION;
+							break;
 
-					case 	ATOM_DESCRIPTION:
-						pos += atoms_get_length(ATOM_DESCRIPTION);
-						api_parts->flags |= OUTPUT_API_FUNCTION_DESCRIPTION;
-						break;  	
+						case 	ATOM_RETURNS:
+							pos += atoms_get_length(ATOM_RETURNS);
+							api_parts->flags |= OUTPUT_API_FUNCTION_RETURNS;
+							break;
 
-					default:
-						break;
+						case 	ATOM_PROTOTYPE:
+							pos += atoms_get_length(ATOM_PROTOTYPE);
+							api_parts->flags |= OUTPUT_API_FUNCTION_PROTOTYPE;
+							break;
+
+						case 	ATOM_PARAMETERS:
+							pos += atoms_get_length(ATOM_PARAMETERS);
+							api_parts->flags |= OUTPUT_API_FUNCTION_PARAMETERS;
+							break;
+
+						case 	ATOM_DESCRIPTION:
+							pos += atoms_get_length(ATOM_DESCRIPTION);
+							api_parts->flags |= OUTPUT_API_FUNCTION_DESCRIPTION;
+							break;  	
+
+						default:
+							raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+							result = 0;
+							break;
+					}
+				}
+				else if (api_parts->flags == OUTPUT_API_TYPES)
+				{
+					switch(atoms_check_word(&name[pos+1]))
+					{
+						case	ATOM_NAME:
+							pos += atoms_get_length(ATOM_NAME);
+							api_parts->flags |= OUTPUT_API_TYPE_NAME;
+							break;
+						
+						case 	ATOM_DESCRIPTION:
+							pos += atoms_get_length(ATOM_DESCRIPTION);
+							api_parts->flags |= OUTPUT_API_TYPE_DESCRIPTION;
+							break;
+
+						default:
+							raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+							result = 0;
+							break;
+					}
+				}
+				else if (api_parts->flags == OUTPUT_API_CONSTANTS)
+				{
+					switch(atoms_check_word(&name[pos+1]))
+					{
+
+						case	ATOM_NAME:
+							pos += atoms_get_length(ATOM_NAME);
+							api_parts->flags |= OUTPUT_API_CONSTANTS_NAME;
+							break;
+						
+						case 	ATOM_DESCRIPTION:
+							pos += atoms_get_length(ATOM_DESCRIPTION);
+							api_parts->flags |= OUTPUT_API_CONSTANTS_DESCRIPTION;
+							break;
+
+						case	ATOM_CONSTANTS:
+							pos += atoms_get_length(ATOM_CONSTANTS);
+							api_parts->flags |= OUTPUT_API_CONSTANTS_CONSTANT;
+							break;
+
+						default:
+							raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+							result = 0;
+							break;
+					}
 				}
 			}
 		}
@@ -486,9 +557,11 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
  *--------------------------------------------------------------------------------*/
 static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_state, GROUP* tree)
 {
-	GROUP*			group;
-	API_PARTS		item_parts;
-	API_FUNCTION*	current_function;
+	GROUP*				group;
+	API_PARTS			item_parts;
+	API_TYPE*			current_type;
+	API_FUNCTION*		current_function;
+	API_CONSTANTS*		current_constants;
 
 	if ((group = find_group(tree,input_state->group_name,input_state->group_length)) == NULL)
 	{
@@ -532,7 +605,7 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 
 			if (current_function == NULL)
 			{
-				printf("ERROR: function not found\n");
+				raise_warning(0,EC_UNDEFINED_FUNCTION,item_parts.name.name,NULL);
 			}
 			else
 			{
@@ -573,9 +646,116 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 				while (current_function != NULL && (item_parts.flags & OUTPUT_API_MULTIPLE));
 			}
 		}
-		/* output the types */
 
-		/* output the defines */
+		/* output the types */
+		if ((item_parts.flags & OUTPUT_API_TYPES) != 0)
+		{
+			if (item_parts.name.name_length == 0)
+			{
+				current_type = group->api->type_list;
+			}
+			else
+			{
+				current_type = group->api->type_list;
+
+				while (current_type != NULL)
+				{
+					if (item_parts.name.name_length == current_type->name.name_length && 
+						memcmp(item_parts.name.name,current_type->name.name,current_type->name.name_length) == 0)
+					{
+						/* found it */
+						break;
+					}
+					current_type = current_type->next;
+				}
+			}
+
+			if (current_type == NULL)
+			{
+				/* check to see if the user specifically asked for the type or not */
+				if ((item_parts.flags & OUTPUT_API_ALL) != OUTPUT_API_ALL)
+				{
+					raise_warning(0,EC_UNDEFINED_TYPE,item_parts.name.name,NULL);
+				}
+			}
+			else
+			{
+				do
+				{
+					if ((item_parts.flags & OUTPUT_API_TYPE_NAME) != 0)
+					{
+						output_formats[draw_state->format].output_type_name(draw_state,current_type);
+					}
+
+					if ((item_parts.flags & OUTPUT_API_TYPE_RECORDS) != 0)
+					{
+						output_formats[draw_state->format].output_type_description(draw_state,current_type);
+					}
+
+					if ((item_parts.flags & OUTPUT_API_TYPE_DESCRIPTION) != 0)
+					{
+						output_formats[draw_state->format].output_type_records(draw_state,current_type);
+					}
+
+					current_type = current_type->next;
+				}
+				while(current_type != NULL && (item_parts.flags & OUTPUT_API_MULTIPLE));
+			}
+		}
+
+		/* output the constants */
+		if ((item_parts.flags & OUTPUT_API_CONSTANTS) != 0)
+		{
+			if (item_parts.name.name_length == 0)
+			{
+				current_constants = group->api->constants_list;
+			}
+			else
+			{
+				current_constants = group->api->constants_list;
+
+				while (current_constants != NULL)
+				{
+					if (item_parts.name.name_length == current_constants->name.name_length && 
+						memcmp(item_parts.name.name,current_constants->name.name,current_constants->name.name_length) == 0)
+					{
+						/* found it */
+						break;
+					}
+					current_constants = current_constants->next;
+				}
+			}if (current_constants == NULL)
+			{
+				/* check to see if the user specifically asked for the constants or not */
+				if ((item_parts.flags & OUTPUT_API_ALL) != OUTPUT_API_ALL)
+				{
+					raise_warning(0,EC_UNDEFINED_CONSTANTS_GROUP,item_parts.name.name,NULL);
+				}
+			}
+			else
+			{
+				do
+				{
+					if ((item_parts.flags & OUTPUT_API_CONSTANTS_NAME) != 0)
+					{
+						output_formats[draw_state->format].output_constant_name(draw_state,current_constants);
+					}
+	
+					if ((item_parts.flags & OUTPUT_API_CONSTANTS_DESCRIPTION) != 0)
+					{
+						output_formats[draw_state->format].output_constant_description(draw_state,current_constants);
+					}
+
+					if ((item_parts.flags & OUTPUT_API_CONSTANTS_CONSTANT) != 0)
+					{
+						output_formats[draw_state->format].output_constant_records(draw_state,current_constants);
+					}
+
+					current_constants = current_constants->next;
+				}
+				while(current_constants != NULL && (item_parts.flags & OUTPUT_API_MULTIPLE));
+			}
+		}
 
 		output_formats[draw_state->format].output_footer(draw_state);
 	}
@@ -864,6 +1044,163 @@ static MESSAGE*	create_message(unsigned short sender_id, unsigned short receiver
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_constants
+ * Desc : This function will add an cosntants group to the API.
+ *--------------------------------------------------------------------------------*/
+API_CONSTANTS*	add_api_constants(GROUP* group, NAME* name, NAME* description)
+{
+	API_CONSTANTS* result = calloc(1,sizeof(API_CONSTANTS));
+	API_CONSTANTS* current_constants;
+
+	copy_name(name,&result->name);
+	copy_name(description,&result->description);
+
+	if (group->api == NULL)
+	{
+		group->api = calloc(1,sizeof(API));
+		group->api->group = group;
+	}
+
+	/* move the constants to the correct API */
+	if (group->api->constants_list == NULL)
+	{
+		group->api->constants_list = result;
+	}
+	else
+	{
+		current_constants = group->api->constants_list;
+
+		while (current_constants != NULL)
+		{
+			if (current_constants->next == NULL)
+			{
+				current_constants->next = result;
+				break;
+			}
+
+			current_constants = current_constants->next;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_constant
+ * Desc : This function will add a constant to the constant group.
+ *--------------------------------------------------------------------------------*/
+void	add_api_constant(API_CONSTANTS* api_constants, NAME* name, NAME* type,  NAME* brief)
+{
+	API_CONSTANT*	new_constant = malloc(sizeof(API_CONSTANT));
+
+	/* initialise the new constant */
+	copy_name(type,&new_constant->name);
+	copy_name(name,&new_constant->value);
+	copy_name(brief,&new_constant->brief);
+
+	if (api_constants->max_name_length < type->name_length)
+	{
+		api_constants->max_name_length = type->name_length;
+	}
+
+	if (api_constants->max_value_length < name->name_length)
+	{
+		api_constants->max_value_length = name->name_length;
+	}
+
+	/* add it to the constant list */
+	if (api_constants->constant_list == NULL)
+	{
+		api_constants->constant_list = new_constant;
+	}
+	else
+	{
+		api_constants->last_constant->next = new_constant;
+	}
+
+	api_constants->last_constant = new_constant;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_type
+ * Desc : This function will add an type to the API.
+ *--------------------------------------------------------------------------------*/
+API_TYPE*	add_api_type(GROUP* group, NAME* name, NAME* description)
+{
+	API_TYPE* result = calloc(1,sizeof(API_TYPE));
+	API_TYPE* current_type;
+
+	copy_name(name,&result->name);
+	copy_name(description,&result->description);
+
+	if (group->api == NULL)
+	{
+		group->api = calloc(1,sizeof(API));
+		group->api->group = group;
+	}
+
+	/* move the type to the correct API */
+	if (group->api->type_list == NULL)
+	{
+		group->api->type_list = result;
+	}
+	else
+	{
+		current_type = group->api->type_list;
+
+		while (current_type != NULL)
+		{
+			if (current_type->next == NULL)
+			{
+				current_type->next = result;
+				break;
+			}
+
+			current_type = current_type->next;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_type_record
+ * Desc : This function will add a type record to the api type.
+ *--------------------------------------------------------------------------------*/
+void	add_api_type_record(API_TYPE* api_type, unsigned int record_type, NAME* name, NAME* type,  NAME* brief)
+{
+	API_TYPE_RECORD*	new_record = malloc(sizeof(API_TYPE_RECORD));
+
+	/* initialise the new record */
+	new_record->record_type = record_type;
+	copy_name(type,&new_record->type_item);
+	copy_name(name,&new_record->name_value);
+	copy_name(brief,&new_record->brief);
+
+	if (api_type->max_type_item_length < type->name_length)
+	{
+		api_type->max_type_item_length = type->name_length;
+	}
+
+	if (api_type->max_name_value_length < name->name_length)
+	{
+		api_type->max_name_value_length = name->name_length;
+	}
+
+	/* add it to the record list */
+	if (api_type->record_list == NULL)
+	{
+		api_type->record_list = new_record;
+	}
+	else
+	{
+		api_type->last_record->next = new_record;
+	}
+
+	api_type->last_record = new_record;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_api_function
  * Desc : This function will add a named function in the list of functions.
  *--------------------------------------------------------------------------------*/
@@ -1009,12 +1346,15 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 	NAME				name;
 	NAME				type;
 	NAME				brief;
+	NAME				description;
 	NODE*				current_node;
 	STATE*				current_state;
 	GROUP*				temp_group;
 	GROUP*				current_group;
 	TIMELINE*			current_timeline;
+	API_TYPE*			current_type;
 	API_FUNCTION*		current_function;
+	API_CONSTANTS*		current_constants;
 	API_PARAMETER*		current_parameter;
 	STATE_TRANSITION*	current_transition;
 
@@ -1059,6 +1399,11 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									state = MODEL_LOAD_API;
 									offset = read_string_record(offset,record,&name);
 									
+									/* init the holders */
+									current_type = NULL;
+									current_function = NULL;
+									current_constants = NULL;
+
 									/* get the group that the API belongs to */
 									if ((current_group = find_group(group_tree,name.name,name.name_length)) == NULL)
 									{
@@ -1095,6 +1440,9 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									}					
 									else
 									{
+										raise_warning(0,EC_ATOM_MUST_BE_DEFINED_WITHIN_A_FUNCTION,NULL,NULL);
+
+
 										printf("ERROR: missing function\n");
 										result = 1;
 									}
@@ -1108,7 +1456,7 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									}					
 									else
 									{
-										printf("ERROR: missing function\n");
+										raise_warning(0,EC_ATOM_MUST_BE_DEFINED_WITHIN_A_FUNCTION,NULL,NULL);
 										result = 1;
 									}
 								break;
@@ -1121,7 +1469,7 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									}
 									else
 									{
-										printf("ERROR: missing function\n");
+										raise_warning(0,EC_ATOM_MUST_BE_DEFINED_WITHIN_A_FUNCTION,NULL,NULL);
 										result = 1;
 									}
 								break;
@@ -1134,7 +1482,7 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									}
 									else
 									{
-										printf("ERROR: missing function\n");
+										raise_warning(0,EC_ATOM_MUST_BE_DEFINED_WITHIN_A_FUNCTION,NULL,NULL);
 										result = 1;
 									}
 								break;
@@ -1144,9 +1492,39 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									offset++;
 								break;
 
+								case LINKER_API_TYPE_START:
+									offset = read_pair_record(offset,record,&name,&description);
+									current_type = add_api_type(current_group,&name,&description);
+								break;
+								
+								case LINKER_API_TYPE_FIELD:
+									offset = read_type_record(offset,record,&type,&name,&brief);
+									add_api_type_record(current_type,LINKER_API_TYPE_FIELD,&name,&type,&brief);
+								break;
+								
+								case LINKER_API_TYPE_END:
+									current_type = NULL;
+									offset++;
+								break;
+
 								case LINKER_API_END:
 									state = MODEL_LOAD_UNKNOWN;
 									offset++;
+								break;
+
+								case LINKER_API_CONSTANTS_START:
+									offset = read_pair_record(offset,record,&name,&description);
+									current_constants = add_api_constants(current_group,&name,&description);
+								break;
+
+								case LINKER_API_CONSTANT:
+									offset = read_type_record(offset,record,&type,&name,&brief);
+									add_api_constant(current_constants,&name,&type,&brief);
+								break;
+
+								case LINKER_API_CONSTANTS_END:
+									current_constants = NULL;
+									offset += 1;
 								break;
 
 								case LINKER_END:
@@ -1159,7 +1537,6 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									break;
 
 								default:
-									printf("bad item in api: %02x\n",record[offset]);
 									hex_dump(&record[offset],16);
 									raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)model_file,NULL);
 									result = 1;
@@ -1386,7 +1763,7 @@ static unsigned int	connect_model(GROUP* group_tree, unsigned short max_state, u
 				{
 					while(current_trans != NULL)
 					{
-						current_trans->next_state = state_jump[((unsigned int)current_trans->next_state)];
+						current_trans->next_state = state_jump[((unsigned long)current_trans->next_state)];
 						current_trans = current_trans->next;
 					}
 				}
@@ -1438,12 +1815,12 @@ static unsigned int	connect_model(GROUP* group_tree, unsigned short max_state, u
 				{
 					if (current_node->sent_message != NULL)
 					{
-						if (node_jump[((unsigned int)current_node->sent_message->receiver)])
+						if (node_jump[((unsigned long)current_node->sent_message->receiver)])
 						{
-							node_jump[((unsigned int)current_node->sent_message->receiver)]->received_message = current_node->sent_message;
-							current_node->sent_message->target_timeline = node_jump[((unsigned int)current_node->sent_message->receiver)]->timeline;
+							node_jump[((unsigned long)current_node->sent_message->receiver)]->received_message = current_node->sent_message;
+							current_node->sent_message->target_timeline = node_jump[((unsigned long)current_node->sent_message->receiver)]->timeline;
 						}
-						current_node->sent_message->receiver = node_jump[((unsigned int)current_node->sent_message->receiver)];
+						current_node->sent_message->receiver = node_jump[((unsigned long)current_node->sent_message->receiver)];
 					}
 					current_node = current_node->next;
 				}

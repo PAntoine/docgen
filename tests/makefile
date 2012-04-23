@@ -15,7 +15,9 @@
 
 HEADER_FILES = $(wildcard include/*.h)
 SOURCE_FILES = $(wildcard source/*.c)
-OBJECT_FILES = $(subst source/,object/,$(subst .c,.pdso,$(SOURCE_FILES)))
+SRC_OBJ_FILES = $(subst source/,object/,$(addsuffix .pdso,$(SOURCE_FILES)))
+HDR_OBJ_FILES = $(subst include/,object/,$(addsuffix .pdso,$(HEADER_FILES)))
+OBJECT_FILES = $(SRC_OBJ_FILES) $(HDR_OBJ_FILES)
 
 DOC_COMPILE_FLAGS = -DSTATE_ONE=test_one
 
@@ -27,7 +29,10 @@ docs: ../pdp object/test.gout
 object/test.gout: $(OBJECT_FILES) ../pdsl
 	@$(DEBUG_FUNC) ../pdsl $(OBJECT_FILES) -o object/test.gout
 
-object/%.pdso : source/%.c ../pdsc
+object/%.h.pdso : include/%.h ../pdsc
+	@$(DEBUG_FUNC) ../pdsc -o $@ $< $(DOC_COMPILE_FLAGS)
+
+object/%.c.pdso : source/%.c ../pdsc
 	@$(DEBUG_FUNC) ../pdsc -o $@ $< $(DOC_COMPILE_FLAGS)
 
 object:

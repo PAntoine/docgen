@@ -504,9 +504,17 @@ STATE* add_state ( GROUP* group, unsigned char* name, unsigned int name_length, 
  *--------------------------------------------------------------------------------*/
 void	copy_name(NAME* from, NAME* to)
 {
-	to->name = malloc(from->name_length);
-	to->name_length = from->name_length;
+	if (from != NULL)
+	{
+		to->name = malloc(from->name_length);
+		to->name_length = from->name_length;
 
-	memcpy(to->name,from->name,from->name_length);
+		memcpy(to->name,from->name,from->name_length);
+	}
+	else
+	{
+		to->name = NULL;
+		to->name_length = 0;
+	}
 }
 

@@ -22,7 +22,7 @@ export CFLAGS = -ansi -pedantic -funsigned-char
 
 ifdef DEBUG
 CFLAGS += -g
-export DEBUG_FUNC = gdb --args
+export DEBUG_FUNC = gdb -return-child-result -x $(CURDIR)/gdbbatch --args
 endif
 
 ifdef VALGRIND
@@ -32,28 +32,70 @@ endif
 export PATH_SEPARATOR = 0x2f
 
 ifeq ("$(MAKECMDGOALS)","release")
+
 ifeq ("$(VERSION_NAME)","")
 $(error You must specify the version name for the release)
 endif
+
+#--------------------------------------------------------------------------------
+# Workout what files are not wanted to be released.
+#
+# This might be a little to clever for it's own good. But, what it does is to
+# generate all the subdirectories that have to be kept in the list to get the
+# release directories. This means that we can use wildcard to get all the 
+# effected directories then filter-out the list below then delete the 
+# directories.
+#
+# CALL_MAP  - Starts of the recursive call, but it is only here to allow a
+#             single call with a single list to do this.
+# MAP       - This is the termination case using the $if.
+# SUB_MAP   - This does the work. Recursively calls MAP, after removing the
+#             head, then adds the current output list into a new list and
+#             appends the head as a new item to that. After that it outputs
+#             the current list.
+#
+# I would leave it alone if you don't get functional programming and the
+# car/cdr list processing model.
+#--------------------------------------------------------------------------------
+RELEASE_LIST = source include tests/source tests/include tests/makefile readme.md makefile gdbbatch
+	
+SUB_MAP			=	$(call MAP,$(wordlist 2,$(words $(1)),$(1)),$(2)/$(word 2,$(1))) $(2)
+MAP				=	$(if $(1),$(call SUB_MAP,$(1),$(2)))
+CALL_MAP		=	$(call MAP,$(1),$(firstword $(1)))
+
+RELEASABLE_TREE	= $(foreach name,$(RELEASE_LIST),$(call CALL_MAP,$(subst /, ,$(name))))
+NEED_PRUNING	= $(sort $(filter-out $(RELEASE_LIST),$(foreach name,$(RELEASE_LIST),$(call CALL_MAP,$(subst /, ,$(name))))))
+PRUNABLE_DIRS	= $(foreach dir_name,$(NEED_PRUNING),$(wildcard $(dir_name)/*)) $(filter-out $(RELEASE_LIST),$(wildcard *))
+PRUNE_LIST		= $(filter-out $(RELEASABLE_TREE),$(PRUNABLE_DIRS))
+
+$(info not releasing to following files/dirs: $(PRUNE_LIST))
+
 endif
 
-SPECIAL_FILES = source/atoms.c source/symbols.c source/document_linker.c source/document_source_compiler.c source/document_processor.c
-HEADER_FILES = $(wildcard include/*.h)
-SOURCE_FILES = source/atoms.c source/symbols.c $(filter-out $(SPECIAL_FILES),$(wildcard source/*.c))
-OBJECT_FILES = $(subst source,object,$(subst .c,.o,$(SOURCE_FILES)))
+#--------------------------------------------------------------------------------
+# old skool component file list. Makes the compilation easier.
+#--------------------------------------------------------------------------------
+HEADER_FILES 		= $(wildcard include/*.h)
+COMMON_OBJECTS 		= object/atoms.o object/utilities.o object/error_codes.o
+LINKER_OBJECTS 		= 
+COMPILER_OBJECTS	= object/symbols.o object/input_formats.o object/c_cpp_input_functions.o
+PROCESSOR_OBJECTS	= object/supported_formats.o object/text_output_functions.o
 
+#--------------------------------------------------------------------------------
+# Build targets.
+#--------------------------------------------------------------------------------
 all: exes tests
 
-exes: pdsc pdsl
+exes: pdsc pdsl pdp
 
-pdsc : object $(OBJECT_FILES) source/document_source_compiler.c
-	@$(CC) $(CFLAGS) source/document_source_compiler.c -o pdsc $(OBJECT_FILES) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+pdsc : object $(COMMON_OBJECTS) $(COMPILER_OBJECTS) source/document_source_compiler.c
+	@$(CC) $(CFLAGS) source/document_source_compiler.c -o pdsc $(COMPILER_OBJECTS) $(COMMON_OBJECTS) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
 
-pdsl : object $(OBJECT_FILES) source/document_linker.c
-	@$(CC) $(CFLAGS) source/document_linker.c -o pdsl $(OBJECT_FILES) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+pdsl : object $(COMMON_OBJECTS) $(LINKER_OBJECTS) source/document_linker.c
+	@$(CC) $(CFLAGS) source/document_linker.c -o pdsl $(LINKER_OBJECTS) $(COMMON_OBJECTS) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
 
-pdp : object $(OBJECT_FILES) source/document_processor.c
-	@$(CC) $(CFLAGS) source/document_processor.c -o pdp $(OBJECT_FILES) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+pdp : object $(COMMON_OBJECTS) $(PROCESSOR_OBJECTS) source/document_processor.c
+	@$(CC) $(CFLAGS) source/document_processor.c -o pdp $(PROCESSOR_OBJECTS) $(COMMON_OBJECTS) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
 
 tests: pdsc pdsl pdp
 	@$(MAKE) -C tests
@@ -73,6 +115,7 @@ object:
 release:
 	git checkout master^0
 	git reset --soft release
+	git rm --ignore-unmatch -rf $(PRUNE_LIST)
 	git commit -m "$(VERSION_NAME)"
 	git branch new_temp
 	git checkout new_temp

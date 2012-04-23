@@ -53,11 +53,39 @@ extern unsigned int		g_number_records_offset;
 extern unsigned int		g_date_offset;
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_string
+ * Desc : This function will write a string to the output file.
+ *--------------------------------------------------------------------------------*/
+void	write_string(int output_file, NAME* string)
+{
+	unsigned char	length[2];
+
+	if (string != NULL)
+	{
+		length[0] = (string->name_length & 0xff00) >> 8;
+		length[1] = (string->name_length & 0x00ff);
+	}
+	else
+	{
+		length[0] = 0;
+		length[1] = 0;
+	}
+
+	write(output_file,length,2);
+	
+	if (string != NULL && string->name_length > 0)
+	{
+		write(output_file,string->name,string->name_length);
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : output_atoms
  * Desc : This function will output a lookup table to the output file.
  *--------------------------------------------------------------------------------*/
 void output_atoms (int output_file, ATOM_INDEX* index)
 {
+	unsigned int	size;
 	unsigned int	count;
 	unsigned int	data_size;
 	unsigned char	length[2];
@@ -81,7 +109,6 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 			/* now write the records to the file */
 			switch(current->index[count].any.type)
 			{
-
 				case INTERMEDIATE_RECORD_NAME:
 					if (current->index[count].any.func_api == INVALID_ITEM)
 					{
@@ -132,7 +159,31 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 					write(output_file,current->index[count].number.number,4);
 				break;
 
+				case INTERMEDIATE_RECORD_END:
+				case INTERMEDIATE_RECORD_START:
+				case INTERMEDIATE_RECORD_EMPTY:
+					record[RECORD_DATA_SIZE  ] = 0;
+					record[RECORD_DATA_SIZE+1] = 0;
+					write(output_file,record,RECORD_DATA_START);
+					break;
+
+				case INTERMEDIATE_RECORD_TYPE:
+					
+					size =	current->index[count].type.name.name_length +
+							current->index[count].type.type_type.name_length +
+							current->index[count].type.description.name_length + 6;
+
+					record[RECORD_DATA_SIZE  ] = (size & 0xff00) >> 8;
+					record[RECORD_DATA_SIZE+1] = (size & 0x00ff);
+					write(output_file,record,RECORD_DATA_START);
+	
+					write_string(output_file,&current->index[count].type.name);
+					write_string(output_file,&current->index[count].type.type_type);
+					write_string(output_file,&current->index[count].type.description);
+					break;
+
 				default:
+					printf("DEBUG: %d\n",current->index[count].any.type);
 					raise_warning(0,EC_INTERNAL_ERROR_UNKNOWN_RECORD_TYPE,NULL,NULL);
 			}
 		}
@@ -186,31 +237,10 @@ void	output_type(int output_file, ATOM_ATOMS atom_type, unsigned short api_id, u
 
 	write(output_file,record,RECORD_DATA_START);
 
-	length[0] = (return_size & 0x0ff00) >> 8;
-	length[1] = (return_size & 0x000ff);
-	write(output_file,length,2);
-	if (return_size > 0)
-	{
-		write(output_file,return_type->name,return_size);
-	}
-	
-	length[0] = (name_size & 0x0ff00) >> 8;
-	length[1] = (name_size & 0x000ff);
-	write(output_file,length,2);
-	if (name_size > 0)
-	{
-		write(output_file,name->name,name_size);
-	}
-
-	length[0] = (brief_size & 0x0ff00) >> 8;
-	length[1] = (brief_size & 0x000ff);
-	write(output_file,length,2);
-	if (brief_size > 0)
-	{
-		write(output_file,brief->name,brief_size);
-	}
+	write_string(output_file,return_type);
+	write_string(output_file,name);
+	write_string(output_file,brief);
 }
-
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : output_empty
@@ -666,7 +696,7 @@ unsigned int	add_parameter_brief(API_FUNCTION* function, NAME* parameter_name, N
 		if (current_parameter->brief.name_length > 0)
 		{
 			result = EC_DUPLICATE_FIELD_IN_DEFINITION;
-			printf("ERROR: brief already set on parameter\n");
+			raise_warning(0,result,function->name.name,NULL);
 		}
 		else
 		{
@@ -735,7 +765,7 @@ unsigned int	add_parameter_type(API_FUNCTION* function, NAME* parameter_name, NA
 		if (current_parameter->type.name_length > 0)
 		{
 			result = EC_DUPLICATE_FIELD_IN_DEFINITION;
-			printf("ERROR: type already set on parameter\n");
+			raise_warning(0,result,function->name.name,NULL);
 		}
 		else
 		{
@@ -825,7 +855,7 @@ ATOM_ITEM* add_atom ( ATOM_INDEX* list, unsigned int type, ATOM_ATOMS atom )
 	if (list->last->num_items >= ATOM_BLOCK_SIZE)
 	{
 		/* need to increase the size of the index */
-		list->last->next = calloc(1,ATOM_BLOCK_SIZE);
+		list->last->next = calloc(1,sizeof(ATOM_BLOCK));
 		list->last = list->last->next;
 	}
 
@@ -842,7 +872,7 @@ ATOM_ITEM* add_atom ( ATOM_INDEX* list, unsigned int type, ATOM_ATOMS atom )
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_name_atom
- * Desc : This function will add an atom_name item to th
+ * Desc : This function will add an atom_name item to the atom index.
  *--------------------------------------------------------------------------------*/
 static unsigned int add_name_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* atom_group, unsigned int atom_group_length, unsigned char* atom_name, unsigned int atom_name_length, unsigned int func_api )
 {
@@ -894,6 +924,16 @@ void add_string_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* string,
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_start_atom
+ * desc : This function adds the api start atom to the atom_list.
+ *--------------------------------------------------------------------------------*/
+void add_api_start_atom (ATOM_INDEX* list, unsigned char record_group_type, unsigned int group_id)
+{
+	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_START,record_group_type);
+	item->any.func_api	= group_id;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_api_type_atom
  * Desc : This function will add the api type atom. This will add the type and
  *        the name of the type to the atom list. 
@@ -906,6 +946,20 @@ void add_string_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* string,
 void add_api_type_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, NAME* type, NAME* name, NAME* description)
 {
 	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_TYPE,atom);
+
+	copy_name(name,&item->type.name);
+	copy_name(type,&item->type.type_type);
+	copy_name(description,&item->type.description);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_end_atom
+ * desc : This function adds the api end atom to the atom_list.
+ *--------------------------------------------------------------------------------*/
+void add_api_end_atom (ATOM_INDEX* list, unsigned short group_id)
+{
+	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_END,0);
+	item->any.func_api = group_id;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -982,13 +1036,19 @@ void add_pair_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* name, uns
 {
 	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_PAIR,atom);
 
-	item->pair.name				= malloc(name_length);
-	item->pair.name_length		= name_length;
-	memcpy(item->pair.name,name,name_length);
-	
-	item->pair.string			= malloc(string_length);
-	item->pair.string_length	= string_length;
-	memcpy(item->pair.string,string,string_length);
+	if (name_length > 0)
+	{
+		item->pair.name				= malloc(name_length);
+		item->pair.name_length		= name_length;
+		memcpy(item->pair.name,name,name_length);
+	}
+
+	if (string_length > 0)
+	{
+		item->pair.string			= malloc(string_length);
+		item->pair.string_length	= string_length;
+		memcpy(item->pair.string,string,string_length);
+	}
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -1092,18 +1152,23 @@ static unsigned int decode_name(unsigned char* buffer, ATOM_INDEX* atom_list, AT
  *        Actually there is not much to do, as the string will be all data on the
  *        line to the end, so just add it to the atom list.
  *--------------------------------------------------------------------------------*/
-void decode_string (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
+unsigned int decode_string (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
 {
-	unsigned int count;
+	unsigned int count = 0;
 
-	/* trim any unsightly characters */
-	for (count=buffer_length-1;count>0 && buffer[count] < 0x0f ;count--)
+	if (buffer_length > 0)
 	{
+		/* trim any unsightly characters */
+		for (count=buffer_length-1;count>0 && buffer[count] < 0x0f ;count--)
+		{
+		}
+
+		buffer_length = count+1;
 	}
 
-	buffer_length = count+1;
-
 	add_string_atom(atom_list,atom,buffer,buffer_length,function);
+
+	return buffer_length;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -1184,28 +1249,33 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 	unsigned int			found = 0;
 	unsigned int			result = EC_OK;
 	unsigned int			end_comment;
+	unsigned int			eol_comment = 0;
 	API_FUNCTION*			temp;
 	static NAME				return_type;
 	static NAME				function_name;
 	static unsigned int		g_ignore = 0;
-	static unsigned int		g_in_function = 0;
-	static unsigned int		g_in_file_block = 0;
 	static unsigned int		g_multiline = 0;
+	static unsigned char	g_type_state = TYPE_STATE_SEARCHING;
+	static unsigned int		g_in_function = 0;
 	static unsigned int		g_current_api = INVALID_ITEM;
 	static unsigned int		g_current_group = DEFAULT_GROUP;
-	static unsigned int		g_current_function = INVALID_ITEM;
-	static unsigned char	g_looking_for_comment = 1;
-	static unsigned char	g_looking_for_function = 0;
-	static unsigned char	g_function_state = FUNCTION_STATE_SEARCHING;
+	static unsigned int		g_in_file_block = 0;
 	static unsigned short	g_default_group = DEFAULT_GROUP;
+	static unsigned int		g_current_function = INVALID_ITEM;
+	static unsigned char	g_looking_for_type = 0;
+	static unsigned char	g_looking_for_comment = 1;
+	static unsigned char	g_looking_for_globals = 0;
+	static unsigned char	g_looking_for_function = 0;
+	static unsigned char	g_looking_for_constants = 0;
+	static unsigned char	g_function_state = FUNCTION_STATE_SEARCHING;
 
 	/* must be more then one char before the end of the line */
 	while(pos < line_length)
 	{
+		pos = remove_white_space(pos,line);
+		
 		if (g_looking_for_comment)
 		{
-			pos = remove_white_space(pos,line);
-
 			/* find the comment start */
 			if (input_formats[input_type].find_comment(line,line_length,&pos))
 			{
@@ -1219,6 +1289,37 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 				g_looking_for_comment = 0;
 				atom_list->block_count++;
 			}
+			else if (g_looking_for_constants)
+			{
+				/* decode the constants */
+				result = input_formats[input_type].decode_constant(line,line_length,&pos,g_current_group,atom_list);
+			}
+			else if (g_looking_for_type)
+			{
+				switch(g_type_state)
+				{
+					case TYPE_STATE_SEARCHING:
+						if ((g_type_state = input_formats[input_type].decode_type(line,line_length,&pos,g_current_group,atom_list)) == TYPE_STATE_FINISHED)
+						{
+							/* we have finished getting the type - end it.
+							 * This also gives us time to collect the last of the comments that follow the type.
+							 */
+							add_api_end_atom(atom_list,g_current_group);
+							g_type_state = TYPE_STATE_SEARCHING;
+							g_looking_for_type = 0;
+						}
+						break;
+
+					case TYPE_STATE_FAILED:
+						g_function_state = TYPE_STATE_SEARCHING;
+						printf("failed\n");
+						g_looking_for_type = 0;
+						break;
+					default:
+						printf("failed to read the type: state %d\n",g_type_state);
+						g_function_state = TYPE_STATE_SEARCHING;
+				}
+			}
 			else if (g_looking_for_function)
 			{
 				switch(g_function_state)
@@ -1230,11 +1331,13 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 							{
 								if (g_functions.lookup[g_current_function].name_length > 0)
 								{
-									printf("ERROR: this already has a name\n");
+									result = EC_DUPLICATE_NAME;
+									raise_warning(atom_list->line_number,result,g_functions.lookup[g_current_function].name,NULL);
 								}
 								else if (find_lookup(&g_functions,function_name.name,function_name.name_length) != NULL)
 								{
-									printf("ERROR: this is a duplicate\n");
+									result = EC_DUPLICATE_FUNCTION;
+									raise_warning(atom_list->line_number,result,g_functions.lookup[g_current_function].name,NULL);
 								}
 								else
 								{
@@ -1247,11 +1350,13 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 							{
 								if (g_apis.lookup[g_current_api].name_length > 0)
 								{
-									printf("ERROR: this already has a name\n");
+									result = EC_DUPLICATE_NAME;
+									raise_warning(atom_list->line_number,result,g_functions.lookup[g_current_function].name,NULL);
 								}
 								else if (find_lookup(&g_apis,function_name.name,function_name.name_length) != NULL)
 								{
-									printf("ERROR: this is a duplicate\n");
+									result = EC_DUPLICATE_FUNCTION;
+									raise_warning(atom_list->line_number,result,g_functions.lookup[g_current_function].name,NULL);
 								}
 								else
 								{
@@ -1278,7 +1383,8 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 													&function_name,
 													&return_type) != EC_PARAMETER_ADDED)
 							{
-								printf("ERROR: duplicate parameter added\n");
+								result = EC_DUPLICATE_PARAMETER;
+								raise_warning(atom_list->line_number,result,g_functions.lookup[g_current_function].name,NULL);
 							}
 						}
 						break;
@@ -1341,15 +1447,19 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 
 				pos = remove_white_space(pos,line);
 
+				/* detach end of line comments. */
+				{
+					unsigned int temp = line_length-input_formats[input_type].end_of_line_comment_size;
+					if (input_formats[input_type].end_comment(line,line_length,&temp))
+					{
+						line_length -= input_formats[input_type].end_of_line_comment_size;
+						eol_comment = 1;
+					}
+				}
 
 				/* ok, we have a good start char */
 				switch(atom)
 				{
-					/* handle atoms without payload */
-					case ATOM_END_DEFINE:
-						add_atom(atom_list,INTERMEDIATE_RECORD_EMPTY,atom);
-						break;
-
 					/* handle ingore atom - this is special as it ends the comment block */
 					case ATOM_IGNORE:
 						if (g_multiline)
@@ -1384,10 +1494,7 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 							result = EC_FILE_BLOCK_NOT_FIRST_BLOCK;
 							raise_warning(atom_list->line_number,result,NULL,NULL);
 						}
-						if ((err = decode_name(&line[pos],atom_list,atom,(RECORD_FUNCTION_FLAG| g_current_function))) != EC_OK)
-						{
-							result = err;
-						}
+						pos += decode_string(&line[pos],line_length-pos,atom_list,atom,(RECORD_FUNCTION_FLAG| g_current_function));
 
 						g_in_file_block = 1;
 						break;
@@ -1397,16 +1504,15 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 					case ATOM_TO:
 					case ATOM_CALL:
 					case ATOM_SEND:
-					case ATOM_TYPE:
 					case ATOM_AFTER:
 					case ATOM_RECORD:
-					case ATOM_DEFINES:
 					case ATOM_WAITFOR:
 					case ATOM_TRIGGER:
 					case ATOM_TRIGGERS:
 					case ATOM_RESPONDS:
 						if ((err = decode_name(&line[pos],atom_list,atom,(RECORD_FUNCTION_FLAG| g_current_function))) != EC_OK)
 						{
+							/*TODO: decode name needs to change POS so that we dont search the same chars more than once */
 							result = err;
 						}
 						break;
@@ -1420,6 +1526,56 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						}
 						break;
 					
+					/* go find the language dependant constants */
+					case ATOM_CONSTANTS:
+						if (g_looking_for_constants == 1)
+						{
+							result = EC_MULTIPLE_CONSTANTS_REQUEST_WITHOUT_END;
+							raise_warning(atom_list->line_number,result,&line[pos],NULL);
+						}
+						else if (g_in_function)
+						{
+							result = EC_CANNOT_CALL_HAVE_THESE_ATOMS_IN_A_FUNCTION;
+							raise_warning(atom_list->line_number,result,&line[pos],NULL);
+						}
+						else
+						{
+							add_atom(atom_list,INTERMEDIATE_RECORD_EMPTY,atom);
+							g_looking_for_constants = 1;
+						}
+						break;
+
+					case ATOM_END_CONSTANTS:
+						if (g_looking_for_constants == 0)
+						{
+							result = EC_END_CONSTANTS_WITHOUT_START;
+							raise_warning(atom_list->line_number,result,&line[pos],NULL);
+						}
+						else
+						{
+							add_atom(atom_list,INTERMEDIATE_RECORD_EMPTY,atom);
+							g_looking_for_constants = 0;
+						}
+						break;
+
+					/* need to collect the type from the file */
+					case ATOM_TYPE:
+						if (g_looking_for_type != 0)
+						{
+							result = EC_MULTIPLE_TYPE_REQUESTS_WITHOUT_TYPE;
+							raise_warning(atom_list->line_number,result,&line[pos],NULL);
+						}
+						else if (g_in_function)
+						{
+							result = EC_CANNOT_CALL_HAVE_THESE_ATOMS_IN_A_FUNCTION;
+							raise_warning(atom_list->line_number,result,&line[pos],NULL);
+						}
+						else
+						{
+							g_looking_for_type = 1;
+						}
+						break;
+
 					/* function or API atom, starts a function lookup and a creates a function/api */
 					case ATOM_API:
 					case ATOM_FUNCTION:
@@ -1471,7 +1627,7 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						}
 						else 
 						{
-							decode_pair(&line[pos],line_length-pos,atom_list,atom,g_current_api);
+							/* TODO: pos += */ decode_pair(&line[pos],line_length-pos,atom_list,atom,g_current_api);
 						}
 						break;
 					
@@ -1505,7 +1661,7 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 					case ATOM_REPEATS:
 					case ATOM_COPYRIGHT:
 					case ATOM_CONDITION:
-						decode_string(&line[pos],line_length-pos,atom_list,atom,(RECORD_FUNCTION_FLAG| g_current_function));
+						pos += decode_string(&line[pos],line_length-pos,atom_list,atom,(RECORD_FUNCTION_FLAG| g_current_function));
 						break;
 
 					default:	
@@ -1513,6 +1669,15 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						raise_warning(atom_list->line_number,EC_UNKNOWN_COMMAND,NULL,NULL);
 						pos++;
 						break;
+				}
+
+				if (eol_comment)
+				{
+					/* ok, the comment block has come to an end */
+					g_ignore = 0;
+					g_multiline = 0;
+					g_in_file_block = 0;
+					g_looking_for_comment = 1;
 				}
 				break;
 			}
