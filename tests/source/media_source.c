@@ -26,6 +26,8 @@ void	request_directory_listing()
 	HNCP_SendDirectoryListing();
 }
 
+/** @sample: start_sample */
+
 /**
  * @function: request_track_data
  */
@@ -35,6 +37,8 @@ void	request_track_data()
 	 * @responds: SEND_TRACK_DATA
 	 */
 }
+
+/** @end_sample */
 
 void main_loop()
 {

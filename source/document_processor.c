@@ -33,8 +33,9 @@ static unsigned char	string_none[] = "";
 static unsigned char	string_api[] = "api";
 static unsigned char	string_state_machine[] = "state_machine";
 static unsigned char	string_sequence_diagram[] = "sequence_diagram";
-static unsigned char*	type_string[] = {string_none,string_state_machine,string_sequence_diagram,string_api};
-static unsigned int		type_length[] = {0,sizeof(string_state_machine)-1,sizeof(string_sequence_diagram)-1,sizeof(string_api)-1};
+static unsigned char	string_sample[] = "sample";
+static unsigned char*	type_string[] = {string_none,string_state_machine,string_sequence_diagram,string_api,string_sample};
+static unsigned int		type_length[] = {0,sizeof(string_state_machine)-1,sizeof(string_sequence_diagram)-1,sizeof(string_api)-1,sizeof(string_sample)-1};
 
 extern unsigned char is_valid_char[];
 
@@ -400,12 +401,6 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 					pos += atoms_get_length(ATOM_CONSTANTS);
 					break;
 
-				case ATOM_GLOBALS:
-					api_parts->flags = OUTPUT_API_GLOBALS;
-					pos += atoms_get_length(ATOM_GLOBALS);
-					break;
-
-
 				default:
 					raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 					result = 0;
@@ -724,7 +719,9 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 					}
 					current_constants = current_constants->next;
 				}
-			}if (current_constants == NULL)
+			}
+			
+			if (current_constants == NULL)
 			{
 				/* check to see if the user specifically asked for the constants or not */
 				if ((item_parts.flags & OUTPUT_API_ALL) != OUTPUT_API_ALL)
@@ -760,6 +757,38 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 		output_formats[draw_state->format].output_footer(draw_state);
 	}
 }
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : generate_sample
+ * Desc : This function output an sample.
+ *--------------------------------------------------------------------------------*/
+static unsigned int	generate_sample( DRAW_STATE* draw_state, INPUT_STATE* input_state, GROUP* tree)
+{
+	SAMPLE*	current_sample = NULL;
+
+	/* only, support non-grouped samples are the moment */
+	if (input_state->group_length != sizeof("default")-1 && memcmp(input_state->group_name,"default",sizeof("default")-1))
+	{
+		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+	}
+	else
+	{
+		current_sample = tree->sample_list->next;
+
+		while (current_sample != NULL)
+		{
+			if (input_state->item_length == current_sample->name.name_length &&
+				memcmp(current_sample->name.name,input_state->item_name,input_state->item_length) == 0)
+			{
+				output_formats[draw_state->format].output_sample(draw_state,current_sample);
+				break;
+			}
+
+			current_sample = current_sample->next;
+		}
+	}
+}
+
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : read_numeric_record
  * Desc : This function will read a string record.
@@ -890,6 +919,33 @@ static unsigned int	read_pair_record(	unsigned int	offset,
 
 	return (offset + 4 + value->name_length + string->name_length);
 }
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : read_constant_record
+ * Desc : This function reads a constant record.
+ *--------------------------------------------------------------------------------*/
+static unsigned int	read_constant_record(	unsigned int	offset, 
+											unsigned char*	buffer,
+											NAME*			type, 
+											NAME*			name,
+											NAME*			value,
+											NAME*			brief)
+{
+	/* get the lengths */
+	type->name_length	= buffer[offset + 1];
+	name->name_length	= buffer[offset + 2];
+	value->name_length	= ((unsigned short)buffer[offset + 3] << 8) | buffer[offset + 4];
+	brief->name_length	= ((unsigned short)buffer[offset + 5] << 8) | buffer[offset + 6];
+
+	/* get the strings */
+	type->name = &buffer[offset + 7];
+	name->name = &buffer[offset + 7 + type->name_length];
+	value->name = &buffer[offset + 7 + type->name_length + name->name_length];
+	brief->name = &buffer[offset + 7 + type->name_length + name->name_length + value->name_length];
+
+	return (offset + 7 + type->name_length + name->name_length + brief->name_length + value->name_length);
+}
+
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : read_type_record
@@ -1089,23 +1145,24 @@ API_CONSTANTS*	add_api_constants(GROUP* group, NAME* name, NAME* description)
  * Name : add_api_constant
  * Desc : This function will add a constant to the constant group.
  *--------------------------------------------------------------------------------*/
-void	add_api_constant(API_CONSTANTS* api_constants, NAME* name, NAME* type,  NAME* brief)
+void	add_api_constant(API_CONSTANTS* api_constants, NAME* name, NAME* type, NAME* value, NAME* brief)
 {
 	API_CONSTANT*	new_constant = malloc(sizeof(API_CONSTANT));
 
 	/* initialise the new constant */
-	copy_name(type,&new_constant->name);
-	copy_name(name,&new_constant->value);
+	copy_name(type,&new_constant->type);
+	copy_name(name,&new_constant->name);
+	copy_name(value,&new_constant->value);
 	copy_name(brief,&new_constant->brief);
 
-	if (api_constants->max_name_length < type->name_length)
+	if (api_constants->max_name_length < name->name_length)
 	{
-		api_constants->max_name_length = type->name_length;
+		api_constants->max_name_length = name->name_length;
 	}
 
-	if (api_constants->max_value_length < name->name_length)
+	if (api_constants->max_value_length < value->name_length)
 	{
-		api_constants->max_value_length = name->name_length;
+		api_constants->max_value_length = value->name_length;
 	}
 
 	/* add it to the constant list */
@@ -1159,6 +1216,10 @@ API_TYPE*	add_api_type(GROUP* group, NAME* name, NAME* description)
 			current_type = current_type->next;
 		}
 	}
+
+
+	result->max_type_item_length = 4;
+	result->max_name_value_length = 4;
 
 	return result;
 }
@@ -1241,7 +1302,11 @@ static API_FUNCTION*	add_api_function(GROUP* group, NAME* type, NAME* name)
 	result->return_type.name_length = type->name_length;
 	result->return_type.name = malloc(type->name_length);
 	memcpy(result->return_type.name,type->name,type->name_length);
-			
+		
+	/* set the minimum name sizes */
+	result->max_param_name_length = 4;
+	result->max_param_type_length = 4;
+
 	return result;
 }
 
@@ -1326,6 +1391,29 @@ static void	add_api_returns(API_FUNCTION* function, NAME* value, NAME* brief)
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_sample
+ * Desc : This function will sample to the sample list.
+ *--------------------------------------------------------------------------------*/
+static void	add_sample(GROUP* group, NAME* name, NAME* payload)
+{
+	SAMPLE* 	result = calloc(1,sizeof(SAMPLE));
+
+	/* set up the parameter */
+	copy_name(name,&result->name);
+	copy_name(payload,&result->sample);
+
+	if (group->sample_list == NULL)
+	{
+		group->sample_list = result;
+	}
+	else
+	{
+		result->next = group->sample_list;
+		group->sample_list = result;
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : input_model
  * Desc : This function will input the model.
  *--------------------------------------------------------------------------------*/
@@ -1346,6 +1434,7 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 	NAME				name;
 	NAME				type;
 	NAME				brief;
+	NAME				value;
 	NAME				description;
 	NODE*				current_node;
 	STATE*				current_state;
@@ -1411,14 +1500,18 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									}
 									break;
 
+								case LINKER_SAMPLE:
+									offset = read_pair_record(offset,record,&name,&brief);
+									add_sample(group_tree,&name,&brief);
+									break;
+
 								case LINKER_BLOCK_END:
 									offset = FILE_BLOCK_SIZE;
 									break;
 
 								default:
-									printf("bad item in no state: %d\n",record[offset]);
 									hex_dump(&record[offset],16);
-									raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)model_file,NULL);
+									raise_warning(0,EC_UNXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
 									result = 1;
 									break;
 							}
@@ -1441,9 +1534,6 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									else
 									{
 										raise_warning(0,EC_ATOM_MUST_BE_DEFINED_WITHIN_A_FUNCTION,NULL,NULL);
-
-
-										printf("ERROR: missing function\n");
 										result = 1;
 									}
 								break;
@@ -1518,8 +1608,8 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 								break;
 
 								case LINKER_API_CONSTANT:
-									offset = read_type_record(offset,record,&type,&name,&brief);
-									add_api_constant(current_constants,&name,&type,&brief);
+									offset = read_constant_record(offset,record,&type,&name,&value,&brief);
+									add_api_constant(current_constants,&name,&type,&value,&brief);
 								break;
 
 								case LINKER_API_CONSTANTS_END:
@@ -1619,9 +1709,8 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									break;
 
 								default:
-									printf("bad item in state: %02x\n",record[offset]);
 									hex_dump(&record[offset],16);
-									raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)model_file,NULL);
+									raise_warning(0,EC_UNXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
 									result = 1;
 							}
 						}
@@ -1690,9 +1779,8 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									break;
 
 								default:
-									printf("bad item in sequence_diagram: %d\n",record[offset]);
 									hex_dump(&record[offset],16);
-									raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)model_file,NULL);
+									raise_warning(0,EC_UNXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
 									result = 1;
 							}
 						}
@@ -1955,6 +2043,10 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 						{
 							input_state->temp_type = TYPE_SEQUENCE_DIAGRAM;
 						}
+						else if (input_state->buffer[input_state->buffer_pos] == 'a')
+						{
+							input_state->temp_type = TYPE_SAMPLE;
+						}
 						else
 						{
 							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
@@ -2086,6 +2178,10 @@ unsigned int	process_input(GROUP* group_tree, const char* file_name,const char* 
 
 						case TYPE_API:
 							generate_api(&draw_state,&input_state,group_tree);
+							break;
+
+						case TYPE_SAMPLE:
+							generate_sample(&draw_state,&input_state,group_tree);
 							break;
 
 						default:

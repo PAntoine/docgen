@@ -36,6 +36,7 @@ static LOOKUP_LIST	g_group_lookup;
 static LOOKUP_LIST	g_macro_lookup;
 static LOOKUP_LIST	g_functions;
 static LOOKUP_LIST	g_apis;
+static LOOKUP_LIST	g_samples;
 
 extern unsigned char is_valid_char[];
 
@@ -123,7 +124,7 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 				break;
 
 				case INTERMEDIATE_RECORD_PAIR:
-					/* set data length and write record header */
+				/* set data length and write record header */
 					data_size = 2 + current->index[count].pair.name_length + 2 + current->index[count].pair.string_length;
 					record[RECORD_DATA_SIZE  ] = (data_size & 0xff00) >> 8;
 					record[RECORD_DATA_SIZE+1] = data_size & 0xff;
@@ -140,16 +141,17 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 					length[1] = (current->index[count].pair.string_length & 0x000ff);
 					write(output_file,length,2);
 					write(output_file,current->index[count].pair.string,current->index[count].pair.string_length);
-				break;
-
+					break;
+				
 				case INTERMEDIATE_RECORD_STRING:
 				case INTERMEDIATE_RECORD_MULTILINE:
+
 					record[RECORD_DATA_SIZE  ] = (current->index[count].string.string_length & 0xff00) >> 8;
 					record[RECORD_DATA_SIZE+1] = current->index[count].string.string_length & 0xff;
 
 					write(output_file,record,RECORD_DATA_START);
 					write(output_file,current->index[count].string.string,current->index[count].string.string_length);
-				break;
+					break;
 
 				case INTERMEDIATE_RECORD_NUMBERIC:
 					record[RECORD_DATA_SIZE  ] = 0;
@@ -168,7 +170,6 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 					break;
 
 				case INTERMEDIATE_RECORD_TYPE:
-					
 					size =	current->index[count].type.name.name_length +
 							current->index[count].type.type_type.name_length +
 							current->index[count].type.description.name_length + 6;
@@ -177,13 +178,12 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 					record[RECORD_DATA_SIZE+1] = (size & 0x00ff);
 					write(output_file,record,RECORD_DATA_START);
 	
-					write_string(output_file,&current->index[count].type.name);
 					write_string(output_file,&current->index[count].type.type_type);
+					write_string(output_file,&current->index[count].type.name);
 					write_string(output_file,&current->index[count].type.description);
 					break;
 
 				default:
-					printf("DEBUG: %d\n",current->index[count].any.type);
 					raise_warning(0,EC_INTERNAL_ERROR_UNKNOWN_RECORD_TYPE,NULL,NULL);
 			}
 		}
@@ -293,6 +293,7 @@ void	output_api_function(int output_file, API_FUNCTION* function, unsigned short
 void output_lookup (int output_file, LOOKUP_LIST* lookup_list, unsigned int type)
 {
 	unsigned int	count;
+	unsigned int	data_size;
 	unsigned char	record[RECORD_DATA_START];
 	LOOKUP_LIST*	current = lookup_list;
 	
@@ -308,16 +309,43 @@ void output_lookup (int output_file, LOOKUP_LIST* lookup_list, unsigned int type
 			record[RECORD_BLOCK_NUM+1] = 0;
 			record[RECORD_LINE_NUM   ] = (current->lookup[count].line_num & 0xff00) >> 8;
 			record[RECORD_LINE_NUM+1 ] = current->lookup[count].line_num & 0xff;
-			record[RECORD_DATA_SIZE  ] = (current->lookup[count].name_length & 0xff00) >> 8;
-			record[RECORD_DATA_SIZE+1] = current->lookup[count].name_length & 0xff;
-
-			write(output_file,record,RECORD_DATA_START);
-			write(output_file,current->lookup[count].name,current->lookup[count].name_length);
-
-			/* need to output the payload */
-			if (type == INTERMEDIATE_RECORD_API && current->lookup[count].payload != NULL)
+		
+			if (type == INTERMEDIATE_RECORD_SAMPLE)
 			{
-				output_api_function(output_file,(API_FUNCTION*)current->lookup[count].payload,current->lookup[count].group_id,current->lookup[count].line_num);
+				/* write the header */
+				data_size = current->lookup[count].name_length + current->lookup[count].payload_length + 4;
+	
+				record[RECORD_DATA_SIZE  ] = (data_size & 0xff00) >> 8;
+				record[RECORD_DATA_SIZE+1] = data_size & 0xff;
+
+				write(output_file,record,RECORD_DATA_START);
+
+				/* write the data sizes */
+				record[0] = (current->lookup[count].name_length & 0xff00) >> 8;
+				record[1] = current->lookup[count].name_length & 0xff;
+				record[2] = (current->lookup[count].payload_length & 0xff00) >> 8;
+				record[3] = current->lookup[count].payload_length & 0xff;
+				write(output_file,record,4);
+
+				/* write the payload */	
+				write(output_file,current->lookup[count].name,current->lookup[count].name_length);
+				write(output_file,current->lookup[count].payload,current->lookup[count].payload_length);
+			}
+			else
+			{
+				/* write all other records */
+				data_size = current->lookup[count].name_length;
+				
+				record[RECORD_DATA_SIZE  ] = (data_size & 0xff00) >> 8;
+				record[RECORD_DATA_SIZE+1] = data_size & 0xff;
+
+				write(output_file,record,RECORD_DATA_START);
+				write(output_file,current->lookup[count].name,current->lookup[count].name_length);
+
+				if (type == INTERMEDIATE_RECORD_API && current->lookup[count].payload != NULL)
+				{
+					output_api_function(output_file,(API_FUNCTION*)current->lookup[count].payload,current->lookup[count].group_id,current->lookup[count].line_num);
+				}
 			}
 		}
 
@@ -379,6 +407,9 @@ unsigned int	generate_output(ATOM_INDEX* atom_index, char* filename, char* input
 
 		/* dump the apis next */
 		output_lookup(outfile,&g_apis,INTERMEDIATE_RECORD_API);
+
+		/* dump the apis next */
+		output_lookup(outfile,&g_samples,INTERMEDIATE_RECORD_SAMPLE);
 
 		/* dump the atoms */
 		output_atoms (outfile,atom_index);
@@ -967,10 +998,11 @@ void add_api_end_atom (ATOM_INDEX* list, unsigned short group_id)
  * Desc : This function will add the multiline atom, it will trim the white space
  *        from the front and the end of the string.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_multiline_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* string, unsigned int string_length, unsigned int input_type, unsigned int* end_comment)
+unsigned int	add_multiline_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* string, unsigned int string_length, unsigned int input_type, unsigned int* end_comment, unsigned int dont_trim)
 {
+	unsigned int	size = 0;
 	unsigned int	count;
-	unsigned int	found = 0;
+	unsigned int	found = dont_trim;
 	unsigned int	end = string_length;
 	unsigned int	start = 0;
 	ATOM_ITEM*		item = add_atom(list,INTERMEDIATE_RECORD_MULTILINE,atom);
@@ -981,33 +1013,39 @@ unsigned int	add_multiline_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned ch
 		{
 			start++;
 		}
-		else if ((string[count] == '@' && string[count+1] != '@') || (input_formats[input_type].end_comment(string,string_length,&count)))
+		else if (input_formats[input_type].end_comment(string,string_length,&count))
+		{
+			*end_comment = 1;
+			size = count - start - input_formats[input_type].end_of_line_comment_size;
+			end = count;
+			break;
+		}
+		else if (string[count] == '@' && string[count+1] != '@')
 		{
 			/* we found and atom signature or the end of comment, end the search and assume this is the end of the string */
+			size = count - start;
 			end = count;
-
-			if (string[count] != '@')
-			{
-				/* end the comment */
-				*end_comment = 1;
-			}
-
-			if (start > end)
-			{
-				start = end;
-			}
 			break;
 		}
 		else
 		{
+			size++;
 			found = 1;
 		}
 	}
 
-	item->string.string			= malloc(end-start);
-	item->string.string_length	= end-start;
+	size += dont_trim;
 
-	memcpy(item->string.string,&string[start],end-start);
+	item->string.string			= malloc(size);
+	item->string.string_length	= size;
+
+	memcpy(item->string.string,&string[start],size);
+
+	if (dont_trim)
+	{
+		/* need to add a linefeed to the end as this is fixed format */
+		item->string.string[size-1] = 0x0a;
+	}
 
 	return end;
 }
@@ -1147,6 +1185,31 @@ static unsigned int decode_name(unsigned char* buffer, ATOM_INDEX* atom_list, AT
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : decode_name_string
+ * Desc : This function will decode a NAME from the input.
+ *--------------------------------------------------------------------------------*/
+unsigned int decode_name_string (unsigned char* buffer, unsigned int buffer_length, NAME* string)
+{
+	unsigned int count = 0;
+
+	if (buffer_length > 0)
+	{
+		/* trim any unsightly characters */
+		for (count=buffer_length-1;count>0 && buffer[count] < 0x0f ;count--)
+		{
+		}
+
+		buffer_length = count+1;
+	}
+
+	string->name = buffer;
+	string->name_length = count;
+
+	return buffer_length;
+}
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : decode_string
  * Desc : This function will decode a string atom and add it to the atom index.
  *        Actually there is not much to do, as the string will be all data on the
@@ -1236,6 +1299,26 @@ unsigned short decode_group (unsigned char* buffer, unsigned int buffer_length, 
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : collect_sample
+ * Desc : This function will collect the sample and add it to the sample payload.
+ *        Note: there is NO formatting done on the data repeated as it is in the
+ *        original file.
+ *--------------------------------------------------------------------------------*/
+void	collect_sample(LOOKUP_ITEM *item, unsigned char* data, unsigned int data_length)
+{
+	void*			temp;
+	unsigned int	new_size = item->payload_length + data_length + 1;
+
+	if ((temp = realloc(item->payload,new_size)) != NULL)
+	{	
+		item->payload = temp;
+		item->payload[item->payload_length] = 0x0a;
+		memcpy(&item->payload[item->payload_length+1],data,data_length);
+		item->payload_length = new_size;
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : parse_line
  * Desc : This function will parse the line and extract any atoms from it and add
  *        them to the atom list.
@@ -1248,8 +1331,13 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 	unsigned int			atom = -1;
 	unsigned int			found = 0;
 	unsigned int			result = EC_OK;
-	unsigned int			end_comment;
-	unsigned int			eol_comment = 0;
+	unsigned int			fixed;
+	unsigned int			real_eol = line_length;
+	unsigned int			comment_type;
+	unsigned int			sample_start = 0;
+	unsigned int			comment_end = 0;
+	unsigned int			collect_start = 0;
+	NAME					name;
 	API_FUNCTION*			temp;
 	static NAME				return_type;
 	static NAME				function_name;
@@ -1261,8 +1349,11 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 	static unsigned int		g_current_group = DEFAULT_GROUP;
 	static unsigned int		g_in_file_block = 0;
 	static unsigned short	g_default_group = DEFAULT_GROUP;
+	static unsigned int		g_current_sample = INVALID_ITEM;
 	static unsigned int		g_current_function = INVALID_ITEM;
+	static unsigned int		g_waiting_to_collect = 0;
 	static unsigned char	g_looking_for_type = 0;
+	static unsigned char	g_collecting_sample = 0;
 	static unsigned char	g_looking_for_comment = 1;
 	static unsigned char	g_looking_for_globals = 0;
 	static unsigned char	g_looking_for_function = 0;
@@ -1273,26 +1364,40 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 	while(pos < line_length)
 	{
 		pos = remove_white_space(pos,line);
-		
+	
 		if (g_looking_for_comment)
 		{
 			/* find the comment start */
-			if (input_formats[input_type].find_comment(line,line_length,&pos))
+			if ((comment_type = input_formats[input_type].find_comment(line,line_length,&pos)))
 			{
-				if (g_looking_for_function && g_function_state != FUNCTION_STATE_BODY)
+				if (comment_type == 1)
 				{
-					printf("we are looking for a function and we have a comment this is not right - error\n");
+					/* we need to skip the contents of this comment */
+					g_looking_for_comment = 0;
+					g_ignore = 1;
 				}
-							
-				/* we have found the comment we are looking for */
-				g_current_group = g_default_group;
-				g_looking_for_comment = 0;
-				atom_list->block_count++;
+				else if (comment_type == 2)
+				{
+					if (g_looking_for_function && g_function_state != FUNCTION_STATE_BODY)
+					{
+						result = EC_FOUND_COMMENT_EXPECTING_FUNCTION;
+						raise_warning(atom_list->line_number,result,NULL,NULL);
+					}
+
+					/* we have found the comment we are looking for */
+					g_current_group = g_default_group;
+					g_looking_for_comment = 0;
+					atom_list->block_count++;
+				}
 			}
 			else if (g_looking_for_constants)
 			{
 				/* decode the constants */
-				result = input_formats[input_type].decode_constant(line,line_length,&pos,g_current_group,atom_list);
+				if (input_formats[input_type].decode_constant(line,line_length,&pos,g_current_group,atom_list) == 2)
+				{
+					result = EC_FAILED_TO_FIND_CONSTANT;
+					raise_warning(atom_list->line_number,result,NULL,NULL);
+				}
 			}
 			else if (g_looking_for_type)
 			{
@@ -1312,11 +1417,16 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 
 					case TYPE_STATE_FAILED:
 						g_function_state = TYPE_STATE_SEARCHING;
-						printf("failed\n");
 						g_looking_for_type = 0;
+						
+						result = EC_FAILED_TO_FIND_TYPE;
+						raise_warning(atom_list->line_number,result,NULL,NULL);
 						break;
+
 					default:
-						printf("failed to read the type: state %d\n",g_type_state);
+						result = EC_INTERNAL_STATE_ERROR;
+						raise_warning(atom_list->line_number,result,NULL,NULL);
+						
 						g_function_state = TYPE_STATE_SEARCHING;
 				}
 			}
@@ -1412,7 +1522,9 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						break;
 
 					default:
-						printf("failed to read the function: state %d\n",g_function_state);
+						result = EC_FAILED_TO_FIND_FUNCTION;
+						raise_warning(atom_list->line_number,result,g_functions.lookup[g_current_function].name,NULL);
+						
 						g_function_state = FUNCTION_STATE_SEARCHING;
 						g_looking_for_function = 0;
 						break;
@@ -1436,7 +1548,7 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 				g_multiline = 0;
 				pos += atoms_get_length(atom) + 1;
 
-				if (line[pos] != ':')
+				if (line[pos] != ':' && line[pos] != 0x09 && line[pos] != 0x20)
 				{
 					result = EC_WEIRD_STUFF_AFTER_COMMAND;
 					raise_warning(atom_list->line_number,EC_WEIRD_STUFF_AFTER_COMMAND,NULL,NULL);
@@ -1453,10 +1565,10 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 					if (input_formats[input_type].end_comment(line,line_length,&temp))
 					{
 						line_length -= input_formats[input_type].end_of_line_comment_size;
-						eol_comment = 1;
+						comment_end = 1;
 					}
 				}
-
+	
 				/* ok, we have a good start char */
 				switch(atom)
 				{
@@ -1499,7 +1611,6 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						g_in_file_block = 1;
 						break;
 
-
 					/* name atoms */
 					case ATOM_TO:
 					case ATOM_CALL:
@@ -1526,6 +1637,35 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						}
 						break;
 					
+					case ATOM_SAMPLE:
+						if (g_collecting_sample == 1)
+						{
+							result = EC_MULTIPLE_SAMPLES_WITHOUT_END;
+							raise_warning(atom_list->line_number,result,&line[pos],NULL);
+						}
+						else
+						{
+							decode_name_string(&line[pos],line_length-pos,&name);
+							g_current_sample = new_lookup(&g_samples);
+							set_lookup_name(&g_samples.lookup[g_current_sample],&name,atom_list->line_number);
+							
+							g_waiting_to_collect = 1;
+						}
+						break;
+
+					case ATOM_END_SAMPLE:
+						if (g_collecting_sample == 0)
+						{
+							result = EC_END_SAMPLE_WITHOUT_START;
+							raise_warning(atom_list->line_number,result,&line[pos],NULL);
+						}
+						else
+						{
+							g_collecting_sample = 0;
+							g_waiting_to_collect = 0;
+						}
+						break;
+
 					/* go find the language dependant constants */
 					case ATOM_CONSTANTS:
 						if (g_looking_for_constants == 1)
@@ -1636,6 +1776,7 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 					case ATOM_ACTION:
 					case ATOM_EXAMPLES:
 					case ATOM_DESCRIPTION:
+
 						if (atom == ATOM_DESC)
 						{
 							/* desc is an alias of description */
@@ -1643,10 +1784,12 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						}
 
 						g_multiline = atom;
-						end_comment = 0;
-						pos += add_multiline_atom(atom_list,g_multiline,&line[pos],line_length-pos,input_type,&end_comment);
+						comment_end = 0;
 
-						if (end_comment)
+						fixed = input_formats[input_type].trim_multiline(line,line_length,&pos);
+						pos += add_multiline_atom(atom_list,g_multiline,&line[pos],line_length-pos,input_type,&comment_end,0);
+
+						if (comment_end)
 						{
 							g_multiline = 0;
 							g_looking_for_comment = 1;
@@ -1671,7 +1814,7 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						break;
 				}
 
-				if (eol_comment)
+				if (comment_end)
 				{
 					/* ok, the comment block has come to an end */
 					g_ignore = 0;
@@ -1695,13 +1838,14 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 			g_multiline = 0;
 			g_in_file_block = 0;
 			g_looking_for_comment = 1;
-			break;
+		
+			comment_end = 1;
 		}
 		else if (g_ignore == 0 && g_multiline)
 		{
-			unsigned int comment_end = 0;
-
-			pos += add_multiline_atom(atom_list,g_multiline,&line[pos],line_length-pos,input_type,&comment_end);
+			/* trim the multiline comments down */
+			fixed = input_formats[input_type].trim_multiline(line,line_length,&pos);
+			pos += add_multiline_atom(atom_list,g_multiline,&line[pos],line_length-pos,input_type,&comment_end,fixed);
 
 			if (comment_end)
 			{
@@ -1715,6 +1859,17 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 			/* did not match anything - search next */
 			pos++;
 		}
+	}
+	
+	/* see if a sample jar is open and collect the sample */
+	if (g_waiting_to_collect && comment_end)
+	{
+		g_collecting_sample = 1;
+		g_waiting_to_collect = 0;
+	}
+	else if (g_collecting_sample)
+	{
+		collect_sample(&g_samples.lookup[g_current_sample],line,real_eol);
 	}
 
 	return result;
@@ -1749,7 +1904,8 @@ int main(int argc, char* argv[])
 	memset(&g_group_lookup,0, sizeof(g_group_lookup));
 	memset(&g_macro_lookup,0, sizeof(g_macro_lookup));
 	memset(&g_functions,0, sizeof(g_functions));
-	memset(&g_apis,0, sizeof(g_functions));
+	memset(&g_apis,0, sizeof(g_apis));
+	memset(&g_samples,0, sizeof(g_samples));
 
 	raw_atoms.line_number = 0;
 
@@ -1927,10 +2083,14 @@ int main(int argc, char* argv[])
 					{
 						if ((err = parse_line(line_buffer,linesize-1,&raw_atoms,input_file_type)) != EC_OK)
 						{
+							printf("result failed\n");
+							printf("line: %s\n",line_buffer);
+
 							result = 1;
 						}
 					}
 				}
+
 				free(line_buffer);
 
 				if (result == 0)

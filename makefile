@@ -26,7 +26,7 @@ export DEBUG_FUNC = gdb -return-child-result -x $(CURDIR)/gdbbatch --args
 endif
 
 ifdef VALGRIND
-export DEBUG_FUNC = valgrind
+export DEBUG_FUNC = valgrind --track-origins=yes --leak-check=full
 endif
 
 export PATH_SEPARATOR = 0x2f
@@ -57,7 +57,8 @@ endif
 # I would leave it alone if you don't get functional programming and the
 # car/cdr list processing model.
 #--------------------------------------------------------------------------------
-RELEASE_LIST = source include tests/source tests/include tests/makefile readme.md makefile gdbbatch
+RELEASE_LIST = source include tests/source tests/include tests/makefile readme.md makefile gdbbatch \
+			   docs/specification.txt docs/TODO.txt
 	
 SUB_MAP			=	$(call MAP,$(wordlist 2,$(words $(1)),$(1)),$(2)/$(word 2,$(1))) $(2)
 MAP				=	$(if $(1),$(call SUB_MAP,$(1),$(2)))

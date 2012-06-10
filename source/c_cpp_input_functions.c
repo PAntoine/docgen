@@ -20,13 +20,15 @@
 /*--------------------------------------------------------------------------------*
  * Global Settings (with defaults)
  *--------------------------------------------------------------------------------*/
-static unsigned char	g_comment_start		= '/';
-static unsigned char	g_comment_start_end	= '*';
-static unsigned char	g_comment_marker	= '*';
-static unsigned char	g_comment_end_start	= '*';
-static unsigned char	g_comment_end_end	= '/';
-static unsigned char	g_function_start	= '{';
-static unsigned char	g_function_end		= '}';
+static unsigned char	g_comment_start			= '/';
+static unsigned char	g_comment_start_end		= '*';
+static unsigned char	g_comment_marker		= '*';
+static unsigned char	g_comment_pre_marker	= ':';
+static unsigned char	g_comment_cont_marker	= '*';
+static unsigned char	g_comment_end_start		= '*';
+static unsigned char	g_comment_end_end		= '/';
+static unsigned char	g_function_start		= '{';
+static unsigned char	g_function_end			= '}';
 
 static unsigned int		g_found_start = 0;
 static unsigned int		g_level = 0;
@@ -51,6 +53,8 @@ extern SYMBOLS_STRING_TABLE	symbols_table[];
 #define	C_GOT_PRE_TYPE			(9)
 #define	C_POINTER				(10)
 #define	C_GOT_UNION_STRUCT_ENUM	(11)
+#define C_LOOK_FOR_ARRAY		(12)
+#define C_GET_INDEX				(13)
 
 /*--------------------------------------------------------------------------------*
  * find type state machine.
@@ -63,6 +67,20 @@ extern SYMBOLS_STRING_TABLE	symbols_table[];
 #define C_TYPE_STATE_GET_STRUCT_FIELD	(5)
 #define C_TYPE_STATE_GET_ENUM_FIELD		(6)
 #define C_TYPE_STATE_GET_SUB_NAME		(7)
+
+/*--------------------------------------------------------------------------------*
+ * find constant state machine.
+ *--------------------------------------------------------------------------------*/
+#define C_CONSTANT_STATE_LOOKING			(0)
+#define C_CONSTANT_STATE_DEFINE				(1)
+#define C_CONSTANT_STATE_TYPE_DATA			(2)
+#define C_CONSTANT_STATE_CONTINUATION		(3)
+#define C_CONSTANT_STATE_FAILED				(4)
+#define C_CONSTANT_GET_STRING				(5)
+#define C_CONSTANT_GET_NUMBERS				(6)
+#define C_CONSTANT_GET_NAME					(7)
+#define C_CONSTANT_GET_ARRAY_DATA			(8)
+#define C_CONSTANT_FOUND_EQUALS				(9)
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : c_get_type_name
@@ -111,7 +129,51 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 		current_state = C_LOOKING;
 	}
 
-	if (current_state == C_GET_NAME)
+	if (current_state == C_GET_INDEX)
+	{
+		while (current_pos < line_length && is_valid_char[line[current_pos]])
+		{
+			return_type_name[return_type_length++] = line[current_pos++];
+		}
+
+		if (line[current_pos] == ']')
+		{
+			return_type_name[return_type_length++] = ']';
+			*pos = current_pos + 1;
+			current_state = C_LOOK_FOR_ARRAY;
+		}
+		else
+		{
+			current_state = C_START;
+			result = 2;
+		}
+	}
+	else if (current_state == C_LOOK_FOR_ARRAY)
+	{
+		if (line[current_pos] == '[')
+		{
+			return_type_name[return_type_length++] = '[';
+			*pos = *pos + 1;
+			current_state = C_GET_INDEX;
+		}
+		else
+		{
+			*pos = current_pos;
+			g_level = 0;
+			current_state = C_START;
+			result = 1;
+
+			/* set the names */
+			name->name_length = name_length;
+			name->name = malloc(name_length);
+			memcpy(name->name,name_string,name_length);
+
+			return_type->name_length = return_type_length;
+			return_type->name = malloc(return_type_length);
+			memcpy(return_type->name,return_type_name,return_type_length);
+		}
+	}
+	else if (current_state == C_GET_NAME)
 	{
 		if (line[current_pos] == '*')
 		{
@@ -129,25 +191,40 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 				name_string[name_length++] = line[current_pos++];
 			}
 
-			if (line[current_pos] == '(' || line[current_pos] == '\t' || line[current_pos] == ' ' || line[current_pos] == 0x0a || line[current_pos] == 0x0d || line[current_pos] == ',' || line[current_pos] == ')' || line[current_pos] == ';')
+			if (line[current_pos] == '(' 	|| line[current_pos] == '\t' || line[current_pos] == ' ' ||
+				line[current_pos] == 0x0a	|| line[current_pos] == 0x0d || line[current_pos] == ',' ||
+				line[current_pos] == ')' 	|| line[current_pos] == ';'  || line[current_pos] == '[' )
 			{
-				*pos = current_pos;
-				g_level = 0;
-				current_state = C_START;
-				result = 1;
+				/* remove white space */
+				while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20))
+				{
+					current_pos++;
+				}
 
-				/* set the names */
-				name->name_length = name_length;
-				name->name = malloc(name_length);
-				memcpy(name->name,name_string,name_length);
+				if (line[current_pos] == '[')
+				{
+					*pos = current_pos;
+					current_state = C_LOOK_FOR_ARRAY;
+				}
+				else
+				{
+					*pos = current_pos;
+					g_level = 0;
+					current_state = C_START;
+					result = 1;
 
-				return_type->name_length = return_type_length;
-				return_type->name = malloc(return_type_length);
-				memcpy(return_type->name,return_type_name,return_type_length);
+					/* set the names */
+					name->name_length = name_length;
+					name->name = malloc(name_length);
+					memcpy(name->name,name_string,name_length);
+
+					return_type->name_length = return_type_length;
+					return_type->name = malloc(return_type_length);
+					memcpy(return_type->name,return_type_name,return_type_length);
+				}
 			}
 			else
 			{
-				printf("failed --- we have %c\n",line[current_pos]);
 				current_state = C_START;
 				result = 2;
 			}
@@ -170,7 +247,6 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 				}
 				else
 				{
-					printf("bad function format\n");
 					current_state = C_START;
 					result = 2;
 				}
@@ -198,7 +274,6 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 				}
 				else
 				{
-					printf("bad function format\n");
 					current_state = C_START;
 					result = 2;
 				}
@@ -224,7 +299,6 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 				}
 				else
 				{
-					printf("bad function format\n");
 					current_state = C_START;
 					result = 2;
 				}
@@ -243,7 +317,6 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 				}
 				else
 				{
-					printf("bad function format\n");
 					current_state = C_START;
 					result = 2;
 				}
@@ -264,7 +337,6 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 				}
 				else
 				{
-					printf("bad function format\n");
 					current_state = C_START;
 					result = 2;
 				}
@@ -290,14 +362,12 @@ unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsign
 				}
 				else
 				{
-					printf("bad function format\n");
 					current_state = C_START;
 					result = 2;
 				}
 				break;
 
 			default:
-				printf("unexpected reserved symbol in function header: %d\n",word);
 				current_state = C_START;
 				result = 2;
 		}
@@ -376,10 +446,18 @@ unsigned int	c_find_comment(unsigned char* line,unsigned int line_length,unsigne
 
 	if (*pos + 2 < line_length)
 	{
-		if (line[*pos] == g_comment_start && line[(*pos)+1] == g_comment_start_end && line[(*pos)+2] == g_comment_marker)
+		/* have we found a comment */
+		if (line[*pos] == g_comment_start && line[(*pos)+1] == g_comment_start_end)
 		{
+			*pos = *pos + 1;
 			result = 1;
-			*pos = *pos + 2;
+
+			/* is it a special comment */
+			if (line[(*pos)+1] == g_comment_marker)
+			{
+				*pos = *pos + 1;
+				result = 2;
+			}
 		}
 	}
 	return result;
@@ -645,7 +723,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 
 					if (got_type == 2)
 					{
-						printf("ERROR: failed to get the type\n");
 						result = TYPE_STATE_FAILED;
 					}
 					break;
@@ -658,7 +735,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 			{
 				if (got_type == 2)
 				{
-					printf("ERROR: failed to get the type\n");
 					result = TYPE_STATE_FAILED;
 				}
 				else
@@ -717,7 +793,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 			}
 			else if (line[current_pos] != '{')
 			{
-				printf("ERROR: failed to get a valid tag\n");
 				result = TYPE_STATE_FAILED;
 			}
 		}
@@ -731,7 +806,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 		{
 			if (got_type == 2)
 			{
-				printf("ERROR: failed to get the type\n");
 				result = TYPE_STATE_FAILED;
 			}
 			else
@@ -771,7 +845,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 		}
 		else
 		{
-			printf("ERROR: failed name invalid\n");
 			result = TYPE_STATE_FAILED;
 		}
 	}
@@ -804,7 +877,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 				}
 				else
 				{
-					printf("ERROR: failed to get the type for a struct: %c\n",line[*pos]);
 					result = TYPE_STATE_FAILED;
 				}
 			}
@@ -883,7 +955,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 		}
 		else if (line[current_pos] != g_comment_start)
 		{
-			printf("ERROR: bad format unexpected char: %02x\n",line[current_pos]);
 			state = C_TYPE_STATE_LOOKING;
 			result = TYPE_STATE_FAILED;
 		}
@@ -892,7 +963,6 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
 	}
 	else
 	{
-		printf("INTERNAL ERROR: borked state machine\n");
 		result = TYPE_STATE_FAILED;
 	}
 	return result;
@@ -916,124 +986,366 @@ unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned
  *--------------------------------------------------------------------------------*/
 unsigned int c_decode_constant(unsigned char* line,unsigned int line_length,unsigned int* pos, unsigned int current_group, ATOM_INDEX* atom_list)
 {
+	unsigned int		got_type;
 	unsigned int 		result = 0;
 	unsigned int		line_end = line_length;
 	unsigned int		current_pos = *pos;
 	unsigned int		name_start;
 	unsigned int		value_start;
 	unsigned int		name_length = 0;
+	unsigned int		type_type;
 	unsigned char		define_name[MAX_NAME_LENGTH];
-	static unsigned int	continuation = 0;
+	NAME				type_name;
+	NAME				return_type;
+	static unsigned int	state = C_CONSTANT_STATE_LOOKING;
+	static unsigned int brack_count = 0;
 
-	if (continuation)
+	switch(state)
 	{
-		/* remove leading whitespace */
-		while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20))
+		case C_CONSTANT_STATE_CONTINUATION:
 		{
-			current_pos++;
-		}
-
-		/* test the end of the line for the continuation mark */
-		while(line_end > current_pos && (line[line_end] == 0x0a || line[line_end] == 0x0d))
-		{
-			line_end--;
-		}
-
-		if (line[line_end] == '\\')
-		{
-			continuation = 1;
-			current_pos = line_end;
-		}
-		else
-		{
-			continuation = 0;
-			line_end = current_pos;
-		}
-	}
-	else if (line[current_pos] == '#')
-	{
-		current_pos++;
-
-		/* found the start of a constant definition */
-		if ((line_length - current_pos) > 6 && memcmp("define",&line[current_pos],6) == 0)
-		{
-			current_pos += 6;
-
-			/* remove white space */
+			/* remove leading whitespace */
 			while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20))
 			{
 				current_pos++;
 			}
 
-			/* Ok, we have found a define - lets find the equals */
-			name_start = current_pos;
-					
-			while (current_pos < line_length && is_valid_char[line[current_pos]])
+			/* test the end of the line for the continuation mark */
+			while(line_end > current_pos && (line[line_end] == 0x0a || line[line_end] == 0x0d))
 			{
-				define_name[name_length++] = line[current_pos++];
+				line_end--;
 			}
 
-			/* Ok, it is what we are looking for */
-			if ((line[current_pos] == 0x09 || line[current_pos] == 0x20))
+			if (line[line_end] == '\\')
 			{
-				/* remove white space */
-				do
+				state = C_CONSTANT_STATE_CONTINUATION;
+				current_pos = line_end;
+			}
+			else
+			{
+				state = C_CONSTANT_STATE_LOOKING;
+				line_end = current_pos;
+			}
+		}
+		break;
+
+		case C_CONSTANT_STATE_LOOKING:
+		{
+			if (line[current_pos] == '#')
+			{
+				*pos = current_pos + 1;
+				state = C_CONSTANT_STATE_DEFINE;
+			}
+			else if (got_type = c_get_type_name(line,line_length,pos,&return_type,&type_name,&type_type))
+			{
+				if (got_type == 2)
 				{
-					current_pos++;
-				}
-				while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20));
-
-				
-				/* TODO: make the following a function and call it at the end of the mutliple line stuff above */
-
-
-				/* test the end of the line for the continuation mark */
-				while(line_end > current_pos && (line[line_end] == 0x0a || line[line_end] == 0x0d))
-				{
-					line_end--;
-				}
-
-				if (line[line_end] == '\\')
-				{
-					printf("contin\n");
-					printf("value length: %d\n",line_end - current_pos);
-					continuation = 1;
-					line_end = line_length;
+					/* failed to get a type - so fail the whole thing */
+					state = C_CONSTANT_STATE_FAILED;
+					result = 2;
 				}
 				else
 				{
-					/* Ok, we will have find the end of constant as it does not have a continuation
-					 * So the only thing that we are worried about on this line, is EOF or start of
-					 * a comment. 
-					 */
-					value_start = current_pos;
-					while (current_pos < (line_length - 1) && (line[line_end] != 0x0a && line[line_end] != 0x0d))
+					add_api_start_atom(atom_list,RECORD_GROUP_CONSTANT,current_group);
+					state = C_CONSTANT_STATE_TYPE_DATA;
+				}
+			}
+		}
+		break;
+
+		case C_CONSTANT_FOUND_EQUALS:
+		{
+			/* remove leading whitespace */
+			while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20))
+			{
+				current_pos++;
+			}
+			
+			if (current_pos < line_length)
+			{
+				/* look for type starters */
+				if (line[current_pos] == '"')
+				{
+					state = C_CONSTANT_GET_STRING;
+				}
+				else if (line[current_pos] >= 0 && line[current_pos] <= 9)
+				{
+					state = C_CONSTANT_GET_NUMBERS;
+				}
+				else if (is_valid_char[line[current_pos]])
+				{
+					state = C_CONSTANT_GET_NAME;
+				}
+				else if (line[current_pos] == '{')
+				{
+					state = C_CONSTANT_GET_ARRAY_DATA;
+				}
+				else
+				{
+					/* fail as given data invalid */
+					state = C_CONSTANT_STATE_FAILED;
+					result = 2;
+				}
+			}
+		}
+		break;
+
+		case C_CONSTANT_STATE_TYPE_DATA:
+		{
+			/* add the type */
+			add_api_type_atom (atom_list,ATOM_CONSTANTS,&return_type,&type_name,NULL);
+
+			if (line[current_pos] != '=')
+			{
+				state = C_CONSTANT_STATE_FAILED;
+				result = 2;
+			}
+			else
+			{
+				*pos = current_pos + 1;
+				state = C_CONSTANT_FOUND_EQUALS;
+			}
+		}
+		break;
+
+		case C_CONSTANT_GET_NAME:
+		case C_CONSTANT_GET_NUMBERS:
+		{
+			unsigned int	start_pos = current_pos;
+	
+			while (is_valid_char[line[current_pos]])
+			{
+				current_pos++;
+			}
+
+			add_string_atom(atom_list,ATOM_CONSTANTS,&line[start_pos],(current_pos - start_pos),0);
+			
+			if (line[current_pos] == ';')
+			{
+				result = 1;
+				state = C_CONSTANT_STATE_LOOKING;
+				current_pos++;
+			}
+			else
+			{
+				result = 2;
+				state = C_CONSTANT_STATE_LOOKING;
+			}
+			
+			/* always end the atom - work or fail */
+			add_api_end_atom (atom_list,current_group);
+
+
+			*pos = current_pos;
+		}
+		break;
+		
+		case C_CONSTANT_GET_ARRAY_DATA:
+		{
+			unsigned int	start_pos = current_pos;
+			
+			do
+			{
+				if (line[current_pos] == '/' && line[current_pos+1] == '*')
+				{
+					/* split the string around the comment */
+					current_pos--;
+					break;
+				}
+
+				if (line[current_pos] == '{')
+				{
+					brack_count++;
+				}
+				else if (line[current_pos] == '}')
+				{
+					brack_count--;
+				}
+
+				current_pos++;
+			}
+			while (current_pos < line_length && brack_count > 0);
+		
+			if ((current_pos - start_pos) > 0)
+			{
+				add_string_atom(atom_list,ATOM_CONSTANTS,&line[start_pos],(current_pos - start_pos),0);
+			}
+
+			if (line[current_pos] == ';')
+			{
+				add_api_end_atom (atom_list,current_group);
+				result = 1;
+				state = C_CONSTANT_STATE_LOOKING;
+				current_pos++;
+			}
+
+
+			*pos = current_pos;
+		}
+		break;
+
+		case C_CONSTANT_GET_STRING:
+		{	
+			
+			if (line[current_pos] == '"')
+			{
+				unsigned int	start_pos = current_pos;
+				current_pos++;
+
+				while (current_pos < line_length && (line[current_pos] != '"'))
+				{
+					current_pos++;
+				}
+
+				if (line[current_pos] == '"')
+				{
+					add_string_atom(atom_list,ATOM_CONSTANTS,&line[start_pos],(current_pos - start_pos),0);
+				}
+			}
+
+			if (line[current_pos] == ';')
+			{
+				add_api_end_atom (atom_list,current_group);
+				result = 1;
+				state = C_CONSTANT_STATE_LOOKING;
+			}
+
+			*pos = current_pos + 1;
+		}
+		break;
+
+		case C_CONSTANT_STATE_DEFINE:
+		{
+			/* found the start of a constant definition */
+			if ((line_length - current_pos) > 6 && memcmp("define",&line[current_pos],6) == 0)
+			{
+				current_pos += 6;
+
+				/* remove white space */
+				while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20))
+				{
+					current_pos++;
+				}
+
+				/* Ok, we have found a define - lets find the equals */
+				name_start = current_pos;
+
+				while (current_pos < line_length && is_valid_char[line[current_pos]])
+				{
+					define_name[name_length++] = line[current_pos++];
+				}
+
+				/* Ok, it is what we are looking for */
+				if ((line[current_pos] == 0x09 || line[current_pos] == 0x20))
+				{
+					/* remove white space */
+					do
 					{
-						if (c_find_comment(line,line_length,&current_pos))
-						{
-							/* Ok, found a comment - skip back over it. */
-							current_pos -= g_comment_start_length + 1;
-							break;
-						}
 						current_pos++;
 					}
-					
-					/* no need to return the whitespace */
-					line_end = current_pos;
+					while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20));
 
-					/* now trim the white space */
-					while (line[current_pos] < 0x0f || line[current_pos] == 0x20)
+
+					/* TODO: make the following a function and call it at the end of the mutliple line stuff above */
+
+
+					/* test the end of the line for the continuation mark */
+					while(line_end > current_pos && (line[line_end] == 0x0a || line[line_end] == 0x0d))
 					{
-						current_pos--;
+						line_end--;
 					}
 
-					add_pair_atom(atom_list,ATOM_RECORD,&line[name_start],name_length,&line[value_start],current_pos-value_start+1);
+					if (line[line_end] == '\\')
+					{
+						state = C_CONSTANT_STATE_CONTINUATION;
+						line_end = line_length;
+					}
+					else
+					{
+						/* Ok, we will have find the end of constant as it does not have a continuation
+						 * So the only thing that we are worried about on this line, is EOF or start of
+						 * a comment. 
+						 */
+						value_start = current_pos;
+						while (current_pos < (line_length - 1) && (line[line_end] != 0x0a && line[line_end] != 0x0d))
+						{
+							if (c_find_comment(line,line_length,&current_pos))
+							{
+								/* Ok, found a comment - skip back over it. */
+								current_pos -= g_comment_start_length + 1;
+								break;
+							}
+							current_pos++;
+						}
+
+						/* no need to return the whitespace */
+						line_end = current_pos;
+
+						/* now trim the white space */
+						while (line[current_pos] < 0x0f || line[current_pos] == 0x20)
+						{
+							current_pos--;
+						}
+
+						add_pair_atom(atom_list,ATOM_RECORD,&line[name_start],name_length,&line[value_start],current_pos-value_start+1);
+						state = C_CONSTANT_STATE_LOOKING;
+					}
 				}
+			}
+			*pos = line_end;
+		}
+		break;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: c_trim_multiline
+ * @desc: This function will trim the comment block of whitespace for the
+ *        multiline comments.
+ *--------------------------------------------------------------------------------*/
+unsigned int	c_trim_multiline(unsigned char* line,unsigned int line_length,unsigned int* pos)
+{
+	unsigned int 	result = 0;
+	unsigned int 	current_pos = *pos;
+	unsigned char	h_rule;
+
+	if (current_pos < line_length && line[current_pos] == g_comment_cont_marker)
+	{
+		/* ok, it's the marker */
+		current_pos++;
+
+		/* if a char is butted to the cont_marker and is not the pre_marker - delete all of them */
+		if (current_pos < line_length && (line[current_pos] != 0x09 && line[current_pos] != 0x20) && line[current_pos] != g_comment_pre_marker)
+		{
+			h_rule = line[current_pos];
+			current_pos++;
+			
+			/* ok, no space between cont marker and the char - assume hrule */
+			while (current_pos < line_length && line[current_pos] == h_rule)
+			{
+				current_pos++;
+			}
+		}
+		else
+		{
+			/* remove white space */
+			while (current_pos < line_length && (line[current_pos] == 0x09 || line[current_pos] == 0x20))
+			{
+				current_pos++;
 			}
 		}
 	}
 
-	*pos = line_end;
+	if (line[current_pos] == g_comment_pre_marker)
+	{
+		/* skip the pre-marker */
+		current_pos++;
+		result = 1;
+	}
+
+	*pos = current_pos;
 
 	return result;
 }

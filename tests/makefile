@@ -24,15 +24,19 @@ DOC_COMPILE_FLAGS = -DSTATE_ONE=test_one
 all: object docs
 
 docs: ../pdp object/test.gout
+	@echo Producing Document...
 	@$(DEBUG_FUNC) ../pdp -iobject/test.gout source/test_file.md
 
 object/test.gout: $(OBJECT_FILES) ../pdsl
+	@echo Linking Documents...
 	@$(DEBUG_FUNC) ../pdsl $(OBJECT_FILES) -o object/test.gout
 
 object/%.h.pdso : include/%.h ../pdsc
+	@echo Compiling headers...
 	@$(DEBUG_FUNC) ../pdsc -o $@ $< $(DOC_COMPILE_FLAGS)
 
 object/%.c.pdso : source/%.c ../pdsc
+	@echo Compiling Sources...
 	@$(DEBUG_FUNC) ../pdsc -o $@ $< $(DOC_COMPILE_FLAGS)
 
 object:

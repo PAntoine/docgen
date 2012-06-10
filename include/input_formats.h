@@ -54,6 +54,7 @@ typedef unsigned int	(*INPUT_END_FUNCTION)				(unsigned char* line,unsigned int 
 
 typedef unsigned int	(*INPUT_TYPE_DECODE_FUNCTION)		(unsigned char* line,unsigned int line_length,unsigned int* pos, unsigned int current_group, ATOM_INDEX* atom_list);
 typedef unsigned int	(*INPUT_DECODE_CONSTANT_FUNCTION)	(unsigned char* line,unsigned int line_length,unsigned int* pos, unsigned int current_group, ATOM_INDEX* atom_list);
+typedef unsigned int	(*INPUT_TRIM_MULTILINE_FUNCTION)	(unsigned char* line,unsigned int line_length,unsigned int* pos);
 
 
 typedef struct
@@ -70,6 +71,7 @@ typedef struct
 	INPUT_END_FUNCTION				function_end;
 	INPUT_TYPE_DECODE_FUNCTION		decode_type;
 	INPUT_DECODE_CONSTANT_FUNCTION	decode_constant;
+	INPUT_TRIM_MULTILINE_FUNCTION	trim_multiline;
 
 } SOURCE_FORMAT;
 
@@ -87,5 +89,6 @@ unsigned int	c_function_end(unsigned char* line,unsigned int line_length,unsigne
 unsigned int	c_decode_type(unsigned char* line,unsigned int line_length,unsigned int* pos, unsigned int current_group, ATOM_INDEX* atom_list);
 unsigned int	c_decode_constant(unsigned char* line,unsigned int line_length,unsigned int* pos, unsigned int current_group, ATOM_INDEX* atom_list);
 
+unsigned int 	c_trim_multiline(unsigned char* line,unsigned int line_length,unsigned int* pos);
 #endif
 

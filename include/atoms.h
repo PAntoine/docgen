@@ -6,7 +6,7 @@
  *
  * Code and table produced by:
  *            build_graph 
- *            version 0.8
+ *            version 0.9
  *
  *  written by Peter Antoine. 
  *
@@ -37,8 +37,6 @@ typedef enum
 	ATOM_COPYRIGHT,
 	ATOM_CONSTANTS,
 	ATOM_END_CONSTANTS,
-	ATOM_GLOBALS,
-	ATOM_END_GLOBALS,
 	ATOM_EXAMPLES,
 	ATOM_FILE,
 	ATOM_FUNCTION,
@@ -57,7 +55,8 @@ typedef enum
 	ATOM_SEE_ALSO,
 	ATOM_SEND,
 	ATOM_STATE,
-	ATOM_SYNOPSIS,
+	ATOM_SAMPLE,
+	ATOM_END_SAMPLE,
 	ATOM_TAG,
 	ATOM_TIMELINE,
 	ATOM_TO,

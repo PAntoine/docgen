@@ -156,8 +156,6 @@ void	dot_output_message(DRAW_STATE* draw_state, MESSAGE* message)
 		memcpy(&draw_state->buffer[draw_state->offset],message->name,message->name_length);
 		draw_state->offset += message->name_length;
 	}
-
-	printf("%s\n",draw_state->buffer);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*

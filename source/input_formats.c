@@ -29,7 +29,7 @@ static unsigned char	cpp_fmt[] = "cpp";
 /*--------------------------------------------------------------------------------*
  * Input format structures.
  *--------------------------------------------------------------------------------*/
-#define c_style_functions	c_find_comment, c_end_comment, c_function_start, c_find_parameter, c_function_start_level, c_function_end_level, c_function_end, c_decode_type, c_decode_constant
+#define c_style_functions	c_find_comment, c_end_comment, c_function_start, c_find_parameter, c_function_start_level, c_function_end_level, c_function_end, c_decode_type, c_decode_constant, c_trim_multiline
 
 SOURCE_FORMAT	input_formats[] = 
 {

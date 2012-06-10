@@ -91,6 +91,20 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"multiple @constants requests without @end_constants",
 	"@end_constants without a @constants",
 	"undefined constant group referenced"
+	"multiple @sample without @end_sample",
+	"@end_sample without a @sample"
+	"failed to find function",
+	"failed to find constant",
+	"failed to find type",
+	"comment found when expected function",
+	"@descriptor found after @descriptor has been defined for the item",
+	"@brief without a defined item",
+	"INTERNAL_ERROR: bad state",
+	"unexpected atom found",
+	"INTERNAL ERROR: data too large",
+	"unexpected item in state"
+
+
 };
 	
 /*----- FUNCTION -----------------------------------------------------------------*

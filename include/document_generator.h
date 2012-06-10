@@ -31,7 +31,7 @@
 #define MAX_RECORD_SIZE		(USHRT_MAX)
 #define MAX_GROUPS_PER_FILE	(0x7fff)
 
-#define FILE_BLOCK_SIZE		(8 * 1024)
+#define FILE_BLOCK_SIZE		(16 * 1024)
 
 /*--------------------------------------------------------------------------------*
  * File header format
@@ -71,6 +71,7 @@
 #define INTERMEDIATE_RECORD_PAIR		(10)
 #define INTERMEDIATE_RECORD_START		(11)
 #define INTERMEDIATE_RECORD_END			(12)
+#define INTERMEDIATE_RECORD_SAMPLE		(13)
 
 /* record format */
 #define RECORD_TYPE			(0)
@@ -89,6 +90,7 @@
 
 #define RECORD_GROUP_TYPE		(0x01)	/** @brief	The record group contains a single type */
 #define RECORD_GROUP_RECORD		(0x02)	/** @brief	The record group contains a record structure */
+#define RECORD_GROUP_CONSTANT	(0x03)	/** @brief	The record group contains a constant */
 
 /*--------------------------------------------------------------------------------*
  * linker file format
@@ -176,8 +178,10 @@
 #define	LINKER_API_TYPE_END			(30)	/* the end of the type */
 #define LINKER_API_CONSTANTS_START	(31)	/* start of a constant group */
 #define LINKER_API_CONSTANT			(32)	/* a constant */
-#define	LINKER_API_CONSTANTS_END	(33)	/* the end of a constant group */
-#define	LINKER_API_END				(34)	/* the end of the api */
+#define LINKER_API_DATA_CONSTANT	(33)	/* a data constant */
+#define	LINKER_API_CONSTANTS_END	(34)	/* the end of a constant group */
+#define	LINKER_API_END				(35)	/* the end of the api */
+#define	LINKER_SAMPLE				(36)	/* a sample */
 
 /*--------------------------------------------------------------------------------*
  * general useful structures.
@@ -379,6 +383,14 @@ typedef struct tag_block_name
 	struct tag_block_name*	next;
 } BLOCK_NAME;
 
+typedef struct tag_sample
+{
+	NAME	name;								/* the name of the sample */	
+	NAME	sample;								/* the contents of the sample */
+
+	struct tag_sample* next;
+} SAMPLE;
+
 /* state machine types */
 
 typedef struct
@@ -562,9 +574,11 @@ typedef struct tag_api_type
 
 typedef struct tag_api_constant
 {
+	unsigned int	constant;
 	NAME			name;
-	NAME			value;
+	NAME			type;
 	NAME			brief;
+	NAME			value;
 
 	struct tag_api_constant*	next;
 } API_CONSTANT;
@@ -632,6 +646,7 @@ struct tag_group
 	STATE_MACHINE*		state_machine;		/* if not NULL the state machine that belongs to this group */
 	API*				api;				/* if not NULL the api definitions that belong to this group */
 	TRIGGER*			trigger_list;		/* the list of triggers that belong to this list */
+	SAMPLE*				sample_list;		/* the list of samples that belong to the group */
 	struct tag_group*	next;				/* the next group in the list */
 };
 
@@ -702,7 +717,7 @@ typedef struct
 	unsigned int	offset;
 	unsigned int	record_size;
 	unsigned char*	buffer;
-	RECORD_BITS		buffer_list[4];
+	RECORD_BITS		buffer_list[20];
 
 } OUTPUT_FILE;
 
@@ -718,6 +733,12 @@ typedef struct
 #define TYPE_STATE_MACHINE					(1)
 #define TYPE_SEQUENCE_DIAGRAM				(2)
 #define TYPE_API							(3)
+#define TYPE_SAMPLE							(4)
+
+#define FORMAT_WRAP							(0x0001)
+#define	FORMAT_WORD_WRAP					(0x0002)
+#define	FORMAT_MULTILINE					(0x0004)
+#define	FORMAT_WRAP_COMPLEX					(0x0008)
 
 #define	INPUT_STATE_INTERNAL_SEARCHING		(0)
 #define	INPUT_STATE_INTERNAL_SCHEME			(1)

@@ -121,3 +121,10 @@ all the names of the types in the system:
 [model:/*/api/type/*/name]
 
 
+Now Test to see if the samples work
+-----------------------------------
+
+Dumping the first test sample:
+
+[model:/default/sample/test_three]
+

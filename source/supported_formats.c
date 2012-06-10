@@ -38,7 +38,7 @@ static unsigned int		state_machine_diagram_len = sizeof(state_machine_diagram_na
 
 OUTPUT_FORMATS	output_formats[] = 
 {
-	{text_fmt,	TEXT_LEN,	text_open,text_close,text_output_header,text_output_footer,text_output_raw,
+	{text_fmt,	TEXT_LEN,	text_open,text_close,text_output_header,text_output_footer,text_output_raw,text_output_sample,
 							text_output_timelines,text_output_message,
 							text_output_states,	text_output_start_state,text_output_transition,text_output_end_state,
 							text_output_api_name_function, text_output_api_description_function, text_output_api_prototype_function,

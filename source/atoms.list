@@ -8,8 +8,6 @@ condition
 copyright
 constants
 end_constants
-globals
-end_globals
 examples
 file
 function
@@ -28,7 +26,8 @@ returns
 see_also
 send
 state
-synopsis
+sample
+end_sample
 tag
 timeline
 to

@@ -29,10 +29,14 @@
  *               stretch the generator, but they are a start.
  *--------------------------------------------------------------------------------*/
 
+/** @sample: test_three */
+
 #define DGTF_IF_EXTENTION_OFFSET	(64 * 1024)				/** @brief: when extending the ini file, this number offsets the extension sets */
 #define DGTF_AF_EXTENTION_OFFSET	(14 * 1024)				/** @brief: more stuff for testing */
 #define DGTF_AF_ONE					14						/** @brief: more stuff for testing */
 #define DGTF						"gffgfgfgfg gfgfgfgg"	/** @brief: more stuff for testing */
+
+/** @end_sample */
 
 #define DGTF_IF_IdIsSystem(x)	(((x)<DGTF_IF_EXTENTION_OFFSET?1:0))
 
@@ -127,7 +131,7 @@ typedef struct tag_hnut_if_configuration
 
 /**--------------------------------------------------------------------------------*
  * @type: DGTF_IF_TEST_CONFIGURATION_2
- * @desc:
+ * @desc: This is to test something.
  *
  * ### The following are the .ini handlers - just another description.
  *--------------------------------------------------------------------------------*/
@@ -150,7 +154,6 @@ typedef union tag_hnut_if_configuration_2
 /**--------------------------------------------------------------------------------*
  * @type: DGTF_IF_TEST_CONFIGURATION_3
  * @desc:
- *
  * --- The following are the .ini handlers.
  *--------------------------------------------------------------------------------*/
 typedef struct tag_hnut_if_configuration_3{

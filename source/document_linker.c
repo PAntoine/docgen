@@ -42,6 +42,7 @@ static unsigned int	g_max_call_depth	= 10;
  *--------------------------------------------------------------------------------*/
 GROUP 	g_group_tree = {{0x00},0,0,NULL,NULL,NULL,NULL};
 static FUNCTION		g_function_list = {0,0,{0x00},NULL,NULL};
+static SAMPLE		g_sample_list = {{0,0},{0,0},NULL};
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : test_walk_node_tree
@@ -293,6 +294,33 @@ void	add_api_type_record(API_TYPE* api_type, unsigned int record_type,NAME* name
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_api_constant_record
+ * Desc : This function will add a type record to the api type.
+ *--------------------------------------------------------------------------------*/
+void	add_api_constant_record(API_CONSTANTS* api_constants, unsigned int record_type,NAME* type, NAME* name,  NAME* brief)
+{
+	API_CONSTANT*	new_constant = malloc(sizeof(API_CONSTANT));
+
+	/* initialise the new constant */
+	copy_name(name,&new_constant->name);
+	copy_name(type,&new_constant->type);
+	copy_name(brief,&new_constant->brief);
+
+	/* add it to the constant list */
+	if (api_constants->constant_list == NULL)
+	{
+		api_constants->constant_list = new_constant;
+	}
+	else
+	{
+		api_constants->last_constant->next = new_constant;
+	}
+
+	api_constants->last_constant = new_constant;
+	new_constant->constant = 1;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_api_constant
  * Desc : This function will add a constant to the api constants group list.
  *--------------------------------------------------------------------------------*/
@@ -428,6 +456,33 @@ FUNCTION*	add_function(unsigned char* name, unsigned int name_length, unsigned i
 	memcpy(result->name,name,name_length);
 
 	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_sample
+ * Desc : This function will add a named sample in the list of samples.
+ *--------------------------------------------------------------------------------*/
+void	add_sample(unsigned char* data, unsigned int data_length)
+{
+	SAMPLE* result = calloc(1,sizeof(SAMPLE));
+	unsigned int	name_length;
+	unsigned int	sample_length;
+
+	name_length = ((((unsigned int)data[0]) << 8) | data[1]);
+	sample_length = ((((unsigned int)data[2]) << 8) | data[3]);
+
+	/* add it to the front, these are unordered */
+	result->next = g_sample_list.next;
+	g_sample_list.next = result;
+
+	/* set the values of the new sample */
+	result->name.name_length = name_length;
+	result->name.name = malloc(name_length);
+	memcpy(result->name.name,&data[4],name_length);
+
+	result->sample.name_length = sample_length;
+	result->sample.name = malloc(sample_length);
+	memcpy(result->sample.name,&data[4+name_length],sample_length);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -1070,7 +1125,6 @@ unsigned int	add_numeric_to_block (	GROUP**			local_group_list,
 			break;
 
 		default:
-			printf("atom: -- %d %d\n",record[RECORD_ATOM],ATOM_DESCRIPTION);
 			result = EC_UNKNOWN_ATOM;
 			raise_warning(line_number,result,NULL,NULL);
 			break;
@@ -1078,7 +1132,6 @@ unsigned int	add_numeric_to_block (	GROUP**			local_group_list,
 
 	return result;
 }
-
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_to_pair_list
@@ -1157,12 +1210,11 @@ unsigned int	add_pair_to_block (	GROUP**			local_group_list,
 		case ATOM_TYPE:
 			if (node->api_type != NULL)
 			{
-				add_api_type_record(node->api_type,ATOM_TYPE_FIELD,&name,&string,NULL);
+				add_api_type_record(node->api_type,ATOM_TYPE_FIELD,&string,&name,NULL);
 			}
 			break;
 
 		default:
-			printf("atom: -- %d %d\n",record[RECORD_ATOM],ATOM_DESCRIPTION);
 			result = EC_UNKNOWN_ATOM;
 			raise_warning(line_number,result,NULL,NULL);
 			break;
@@ -1194,9 +1246,10 @@ unsigned int	add_atom_to_constant(	GROUP** 		local_group_list,
 		case ATOM_DESC:
 		case ATOM_DESCRIPTION:
 			node->api_constants->description.name = realloc(node->api_constants->description.name,
-															node->api_constants->description.name_length+payload_length);
-			memcpy(&node->api_constants->description.name[node->api_constants->description.name_length],payload,payload_length);
-			node->api_constants->description.name_length += payload_length;
+															node->api_constants->description.name_length+payload_length+1);
+			node->api_constants->description.name[node->api_constants->description.name_length] = 0x20;
+			memcpy(&node->api_constants->description.name[node->api_constants->description.name_length+1],payload,payload_length);
+			node->api_constants->description.name_length += payload_length + 1;
 			break;
 
 		case ATOM_BRIEF:
@@ -1208,17 +1261,36 @@ unsigned int	add_atom_to_constant(	GROUP** 		local_group_list,
 				}
 				else
 				{
-					printf("ERROR: double description\n");
+					result = EC_DOUBLE_DESCRIPTOR_FOUND;
+					raise_warning (0,result,node->api_constants->last_constant->brief.name,NULL);
 				}
 			}
 			else
 			{
-				printf("ERROR: brief without a type\n");
+				result = EC_BRIEF_WITHOUT_A_TYPE;
+				raise_warning (0,result,node->api_constants->last_constant->brief.name,NULL);
+			}
+			break;
+
+		case ATOM_CONSTANTS:
+			if (node->api_constants != NULL && node->api_constants->last_constant != NULL)
+			{
+				/* add the new data to the end of the old */
+				unsigned char* new_val;
+				void* old = node->api_constants->last_constant->value.name;
+				unsigned int old_size = node->api_constants->last_constant->value.name_length;
+					
+				new_val = realloc(old,old_size+payload_length);
+				memcpy(&new_val[old_size],payload,payload_length);
+
+				node->api_constants->last_constant->value.name = new_val;
+				node->api_constants->last_constant->value.name_length += payload_length;
 			}
 			break;
 
 		default:
-			printf("constant: unknown atom: %02x %d\n",record[RECORD_ATOM],record[RECORD_ATOM]);
+			result = EC_UNEXPECTED_ATOM;
+			raise_warning (0,result,node->api_constants->last_constant->brief.name,NULL);
 	}
 
 	return result;
@@ -1263,7 +1335,7 @@ unsigned int	add_atom_to_type(	GROUP** 		local_group_list,
 			break;
 
 		case ATOM_TYPE:
-			add_api_type_record(node->api_type,ATOM_TYPE,NULL,&temp,NULL);
+			add_api_type_record(node->api_type,record[RECORD_ATOM],NULL,&temp,NULL);
 			break;
 
 		case ATOM_BRIEF:
@@ -1275,17 +1347,20 @@ unsigned int	add_atom_to_type(	GROUP** 		local_group_list,
 				}
 				else
 				{
-					printf("ERROR: double description\n");
+					result = EC_DOUBLE_DESCRIPTOR_FOUND;
+					raise_warning (0,result,node->api_constants->last_constant->brief.name,NULL);
 				}
 			}
 			else
 			{
-				printf("ERROR: brief without a type\n");
+				result = EC_BRIEF_WITHOUT_A_TYPE;
+				raise_warning (0,result,node->api_constants->last_constant->brief.name,NULL);
 			}
 			break;
 
 		default:
-			printf("type: unknown atom: %02x %d\n",record[RECORD_ATOM],record[RECORD_ATOM]);
+			result = EC_UNEXPECTED_ATOM;
+			raise_warning (0,result,node->api_constants->last_constant->brief.name,NULL);
 	}
 
 	return result;
@@ -1350,16 +1425,18 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 			break;
 
 		case ATOM_ACTION:
-			node->action.name = realloc(node->action.name,node->action.name_length+payload_length);
-			memcpy(&node->action.name[node->action.name_length],payload,payload_length);
-			node->action.name_length += payload_length;
+			node->action.name = realloc(node->action.name,node->action.name_length+payload_length+1);
+			node->action.name[node->action.name_length] = 0x20;
+			memcpy(&node->action.name[node->action.name_length+1],payload,payload_length);
+			node->action.name_length += payload_length + 1;
 			break;
 
 		case ATOM_DESC:
 		case ATOM_DESCRIPTION:
-			node->description.name = realloc(node->description.name,node->description.name_length+payload_length);
-			memcpy(&node->description.name[node->description.name_length],payload,payload_length);
-			node->description.name_length += payload_length;
+			node->description.name = realloc(node->description.name,node->description.name_length+payload_length+1);
+			node->description.name[node->description.name_length] = 0x20;
+			memcpy(&node->description.name[node->description.name_length+1],payload,payload_length);
+			node->description.name_length += payload_length + 1;
 
 			break;
 
@@ -1634,7 +1711,6 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 			break;
 
 		default:
-			printf("++ atom: %d %d\n",record[RECORD_ATOM],ATOM_DESCRIPTION);
 			line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
 			raise_warning(line_number,EC_UNKNOWN_ATOM,NULL,NULL);
 			result = EC_UNKNOWN_ATOM;
@@ -1652,7 +1728,6 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, NAME* type, NAME* name, NAME* brief)
 {
 	unsigned int	result = 0;
-	API_PARAMETER*	new_parameter;
 
 	if (atom == ATOM_API)
 	{
@@ -1665,7 +1740,7 @@ unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, N
 	}
 	else if (atom == ATOM_PARAMETER)
 	{
-		new_parameter = calloc(1,sizeof(API_PARAMETER));
+		API_PARAMETER* new_parameter = calloc(1,sizeof(API_PARAMETER));
 
 		new_parameter->name.name = name->name;
 		new_parameter->name.name_length = name->name_length;
@@ -1678,7 +1753,11 @@ unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, N
 		function->parameter_list = new_parameter;
 	}
 	else
-		printf("unknown:%d \n",atom);
+	{
+		/* TODO: fix raise_warning to allow for other types */
+		result = EC_UNEXPECTED_ATOM;
+		raise_warning (0,result,NULL,NULL);
+	}
 
 	return result;
 }
@@ -1730,6 +1809,30 @@ unsigned int	decode_type(unsigned char* record, unsigned int record_length, NAME
 	return result;
 }
 
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : new_constant
+ * Desc : This function will create a new constant and add it to the end of the
+ *        current constant list.
+ *--------------------------------------------------------------------------------*/
+void	new_constant(API_CONSTANTS* constants)
+{
+	API_CONSTANT*	result = calloc(1,sizeof(API_CONSTANT));
+
+	if (constants->constant_list == NULL)
+	{
+		constants->constant_list = result;
+		constants->last_constant = result;
+	}
+	else
+	{
+		constants->last_constant->next = result;
+	}
+
+	/* it is a constant from a type not a define */
+	result->constant = 1;
+}
+
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : process_input
  * Desc : This function will read an input file and add the atoms to the set if
@@ -1758,7 +1861,7 @@ unsigned int	process_input(const char* filename)
 	NAME			name;
 	NAME			brief;
 	BLOCK_NODE		block_node;
-	
+
 	static GROUP*			local_group[MAX_GROUPS_PER_FILE];
 	static FUNCTION*		local_functions[MAX_GROUPS_PER_FILE];
 	static API_FUNCTION*	local_api_functions[MAX_GROUPS_PER_FILE];
@@ -1836,7 +1939,6 @@ unsigned int	process_input(const char* filename)
 					if (record_size > 0 && read(infile,record_buffer,record_size) != record_size)
 					{
 						/* failed to read the record --- problem with the file */
-						printf("length wrong: %d %04x %d\n",record_size,record_size,record[RECORD_TYPE]);
 						raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
 						result = 1;
 					}
@@ -1878,6 +1980,10 @@ unsigned int	process_input(const char* filename)
 								num_functions++;
 								break;
 
+							case INTERMEDIATE_RECORD_SAMPLE:
+								 add_sample(record_buffer,record_size);
+								break;
+
 							case INTERMEDIATE_RECORD_API:
 								group = (((unsigned int)(record[RECORD_GROUP]) << 8) | record[RECORD_GROUP+1]);
 
@@ -1903,12 +2009,16 @@ unsigned int	process_input(const char* filename)
 
 							case INTERMEDIATE_RECORD_TYPE:
 								result = decode_type(record_buffer,record_size,&type,&name,&brief);
-								
+	
 								if (block_node.api_type != NULL)
 								{
 									add_api_type_record(block_node.api_type,ATOM_TYPE_RECORD,&type,&name,&brief);
 								}
-								else if (current_api_function != INVALID_ITEM)
+								else if (block_node.api_constants != NULL)
+								{
+									add_api_constant_record(block_node.api_constants,ATOM_TYPE_RECORD,&type,&name,&brief);
+								}
+								else if (current_api_function != MAX_GROUPS_PER_FILE)
 								{
 									decode_api_function_type(local_api_functions[current_api_function],record[RECORD_ATOM],&type,&name,&brief);
 								}
@@ -1976,7 +2086,7 @@ unsigned int	process_input(const char* filename)
 														record_buffer,
 														record_size);
 								break;
-	
+
 							case INTERMEDIATE_RECORD_PAIR:
 								add_pair_to_block(	local_group,
 													local_functions,
@@ -1989,23 +2099,43 @@ unsigned int	process_input(const char* filename)
 
 							case INTERMEDIATE_RECORD_START:
 								group = (((unsigned int)(record[RECORD_GROUP]) << 8) | record[RECORD_GROUP+1]);
-								
+
 								if (group == DEFAULT_GROUP)
 								{
 									group = 0;
 								}
-								
-								block_node.api_type = calloc(1,sizeof(API_TYPE));
-								in_api_group = 1;
+
+								/* types can be created here */
+								/* TODO: this is wrong -- all types must have a type block - originally coded badly.
+								 * so this should be fixed.
+								 *
+								 * The constants are correct already.
+								 */
+								if (record[RECORD_ATOM] != RECORD_GROUP_CONSTANT)
+								{
+									block_node.api_type = calloc(1,sizeof(API_TYPE));
+									in_api_group = 1;
+								}
+								else if (block_node.api_constants == NULL)
+								{
+									raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
+								}
+								else
+								{
+									new_constant(block_node.api_constants);
+								}
+
 								break;
 
 							case INTERMEDIATE_RECORD_END:
 								/*TODO: fix this: block_node.api_type = NULL; */
-								in_api_group = 0;
+								if (block_node.api_type != NULL)
+								{
+									in_api_group = 0;
+								}
 								break;
 
 							default:
-								printf("=== %d\n",record[RECORD_TYPE]);
 								raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
 								result = 1;
 						}
@@ -2644,7 +2774,7 @@ unsigned int	find_wait(TIMELINE* search_timeline, TIMELINE* timeline, NODE** sen
 			{
 				if (sent_message->receiver != NULL)
 				{
-					printf("1 needs dup: %s\n",sent_message->name);
+					printf("supported cascade copy required\n");
 				}
 				else
 				{
@@ -2970,6 +3100,8 @@ int	open_file(OUTPUT_FILE* file, char* file_name)
  *--------------------------------------------------------------------------------*/
 void	write_to_file(OUTPUT_FILE* file)
 {
+	unsigned int count = 0;
+
 	if ((file->record_size + file->offset) > FILE_BLOCK_SIZE)
 	{
 		if (file->offset < FILE_BLOCK_SIZE)
@@ -2982,31 +3114,17 @@ void	write_to_file(OUTPUT_FILE* file)
 	}
 
 	/* Ok, copy the parts to the output */
-	memcpy(&file->buffer[file->offset],file->buffer_list[0].buffer,file->buffer_list[0].size);
-	file->offset += file->buffer_list[0].size;
-
-	if (file->parts > 1)
+	for (count=0;count < file->parts; count++)
 	{
-		memcpy(&file->buffer[file->offset],file->buffer_list[1].buffer,file->buffer_list[1].size);
-		file->offset += file->buffer_list[1].size;
-	}
-
-	if (file->parts > 2)
-	{
-		memcpy(&file->buffer[file->offset],file->buffer_list[2].buffer,file->buffer_list[2].size);
-		file->offset += file->buffer_list[2].size;
-	}
-
-	if (file->parts > 3)
-	{
-		memcpy(&file->buffer[file->offset],file->buffer_list[3].buffer,file->buffer_list[3].size);
-		file->offset += file->buffer_list[3].size;
-	}
-
-	if (file->parts > 4)
-	{
-		memcpy(&file->buffer[file->offset],file->buffer_list[4].buffer,file->buffer_list[4].size);
-		file->offset += file->buffer_list[4].size;
+		if (file->offset >= FILE_BLOCK_SIZE)
+		{
+			raise_warning(0,EC_DATA_TOO_LARGE,NULL,NULL);
+		}
+		else
+		{
+			memcpy(&file->buffer[file->offset],file->buffer_list[count].buffer,file->buffer_list[count].size);
+			file->offset += file->buffer_list[count].size;
+		}
 	}
 }
 
@@ -3280,6 +3398,38 @@ void	write_type_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, N
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_constant_record
+ * Desc : This function writes a api constant record to the file.
+ *--------------------------------------------------------------------------------*/
+void	write_constant_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, NAME* name, NAME* value, NAME* brief)
+{
+	unsigned char	buffer[7];
+
+	buffer[0] = type;
+	buffer[1] = type_type->name_length & 0xff;
+	buffer[2] = name->name_length & 0xff;
+	buffer[3] = (value->name_length & 0xff00) >> 8;
+	buffer[4] = value->name_length & 0xff;
+	buffer[5] = (brief->name_length & 0xff00) >> 8;
+	buffer[6] = brief->name_length & 0xff;
+
+	file->parts = 5;
+	file->record_size = 7 + type_type->name_length + name->name_length + brief->name_length + value->name_length;
+	file->buffer_list[0].size = 7;
+	file->buffer_list[0].buffer	= buffer;
+	file->buffer_list[1].size	= type_type->name_length;
+	file->buffer_list[1].buffer = type_type->name;
+	file->buffer_list[2].size	= name->name_length;
+	file->buffer_list[2].buffer = name->name;
+	file->buffer_list[3].size	= value->name_length;
+	file->buffer_list[3].buffer = value->name;
+	file->buffer_list[4].size	= brief->name_length;
+	file->buffer_list[4].buffer = brief->name;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : write_pair_record
  * Desc : This function writes a api pair record to the file.
  *--------------------------------------------------------------------------------*/
@@ -3393,11 +3543,12 @@ void	output_api(OUTPUT_FILE* outfile, API* api)
 
 		while (current_constant != NULL)
 		{
-			write_type_record(	LINKER_API_CONSTANT,
-								outfile,
-								&current_constant->name,
-								&current_constant->value,
-								&current_constant->brief);
+			write_constant_record(	LINKER_API_CONSTANT,
+									outfile,
+									&current_constant->type,
+									&current_constant->name,
+									&current_constant->value,
+									&current_constant->brief);
 
 			current_constant = current_constant->next;
 		}
@@ -3551,7 +3702,7 @@ void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_di
 				if (current_node->received_message == NULL && current_node->wait_message.name_length > 0)
 				{
 					/* TODO: not sure if this is required to be output */
-					printf("w: %s (%p %p)\n",current_node->wait_message.name,(void*)current_node,(void*)current_node->sent_message);
+					printf("found a recives and waits -- need to fix w: %s (%p %p)\n",current_node->wait_message.name,(void*)current_node,(void*)current_node->sent_message);
 				}
 
 				write_empty_record(LINKER_NODE_END,outfile);
@@ -3564,6 +3715,23 @@ void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_di
 	}
 
 	write_empty_record(LINKER_SEQUENCE_END,outfile);
+}
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : output_samples
+ * Desc : This function will output all the samples collected to the output
+ *        file.
+ *--------------------------------------------------------------------------------*/
+void	output_samples(OUTPUT_FILE* outfile, SAMPLE* list)
+{
+	SAMPLE*	current_sample = list;
+
+	while (current_sample != NULL)
+	{
+		write_pair_record(LINKER_SAMPLE,outfile,&current_sample->name,&current_sample->sample);
+		current_sample = current_sample->next;
+	}
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -3604,6 +3772,9 @@ unsigned int	produce_output(char* output_name)
 		file_header[FILE_NAME_LENGTH+1] = 0;
 
 		write(outfile.outfile,file_header,FILE_HEADER_SIZE);
+
+		/* first dump all the samples */
+		output_samples(&outfile,g_sample_list.next);
 
 		/* ok, we have an open file */
 		while (current != NULL)

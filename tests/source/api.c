@@ -16,6 +16,102 @@
  *                    Released Under the Artistic Licence
  *--------------------------------------------------------------------------------*/
 
+/**-------------------------------------------------------------------------------*
+ * @constants: 		Base64 Lookup Table
+ * @description:	These constants are the lookup tables for the base64 encoding.
+ *--------------------------------------------------------------------------------*/
+static const char encoding_string[64] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static const char decoded_byte[256] = {	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x3e,0x00,0x00,0x00,0x3f,
+										0x34,0x35,0x36,0x37,0x38,0x39,0x3a,0x3b,0x3c,0x3d,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,
+										0x0f,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x1a,0x1b,0x1c,0x1d,0x1e,0x1f,0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27,0x28,
+										0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f,0x30,0x31,0x32,0x33,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+										0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+
+/**--------------------------------------------------------------------------------*
+ * The following are lookup tables for the date functions.
+ *--------------------------------------------------------------------------------*/
+unsigned char	wday_month_starts[2][12] = {
+											{0,3,3,6,1,4,6,2,5,0,3,5},					/* normal */
+											{6,2,3,6,1,4,6,2,5,0,3,5}					/* leap year */
+										   };
+
+unsigned char	month_length[2][12] = {
+										{31,28,31,30,31,30,31,31,30,31,30,31},			/* normal */
+										{31,29,31,30,31,30,31,31,30,31,30,31}			/* leap year */
+									  };
+
+unsigned short	day_month_starts[2][12]= {
+											{0,31,59,90,120,151,181,212,243,273,304,334},	/* normal */
+											{0,31,60,91,121,152,182,213,244,274,305,335}	/* leap year */
+										 };
+unsigned int offset_month[2][12]	=	{
+											{31,31,28,31,30,31,30,31,31,30,31,30},
+			 								{31,31,29,31,30,31,30,31,31,30,31,30}
+										};
+
+char*	month_text[] = {"January","February","March","April","May","June","July","August","September","October","November","December"};
+char*	day_text[] = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"};
+
+
+
+static	char*	severity_text[] = { "NONE   :",
+									"EVENT  :",
+									"WARNING:",
+									"COMMENT:"};
+
+static	char*	event_text[]	= { "NONE",
+									"START",
+									"STOP",
+									"LOGIN",
+									"LOGOUT",
+									"MESSAGE"};
+
+static unsigned int data_bit[] = 
+{
+	0x00000080, 0x00000040, 0x00000020, 0x00000010, 0x00000008, 0x00000004, 0x00000002, 0x00000001, 
+	0x00008000, 0x00004000, 0x00002000, 0x00001000, 0x00000800, 0x00000400, 0x00000200, 0x00000100,
+	0x00800000, 0x00400000, 0x00200000, 0x00100000, 0x00080000, 0x00040000, 0x00020000, 0x00010000,
+	0x80000000, 0x40000000, 0x20000000, 0x10000000, 0x08000000, 0x04000000, 0x02000000, 0x01000000
+};
+
+
+const HNMT_MIME_TYPE_MAP	hnmt_mime_types[] = {
+		{HNMT_MTM_TEXT_HTML			,(unsigned char*)"text/html",							sizeof("text/html")-1},
+		{HNMT_MTM_TEXT_CSS			,(unsigned char*)"text/css",							sizeof("text/css")-1},
+		{HNMT_MTM_TEXT_CAL			,(unsigned char*)"text/calendar",						sizeof("text/calendar")-1},
+		{HNMT_MTM_TEXT_JAVASCRIPT	,(unsigned char*)"text/javascript",						sizeof("text/javascript")-1},
+		{HNMT_MTM_APPL_JAVASCRIPT	,(unsigned char*)"application/javascript",				sizeof("application/javascript")-1},
+		{HNMT_MTM_APPL_FORM			,(unsigned char*)"application/x-www-form-urlencoded",	sizeof("application/x-www-form-urlencoded")-1},
+		{HNMT_MTM_APPL_JSON			,(unsigned char*)"application/json",					sizeof("application/json")-1},
+		{HNMT_MTM_IMAGE_PNG			,(unsigned char*)"image/png",							sizeof("image/png")-1},
+		{HNMT_MTM_AUDIO_BASIC		,(unsigned char*)"audio/basic",							sizeof("audio/basic")-1},
+		{HNMT_MTM_AUDIO_MID			,(unsigned char*)"audio/mid",							sizeof("audio/mid")-1},
+		{HNMT_MTM_AUDIO_MPEG		,(unsigned char*)"audio/mpeg",							sizeof("audio/mpeg")-1},
+		{HNMT_MTM_AUDIO_X_AIFF		,(unsigned char*)"audio/x-aiff",						sizeof("audio/x-aiff")-1},
+		{HNMT_MTM_AUDIO_MPEGURL		,(unsigned char*)"audio/x-mpegurl",						sizeof("audio/x-mpegurl")-1},
+		{HNMT_MTM_AUDIO_REALAUDIO	,(unsigned char*)"audio/x-pn-realaudio",				sizeof("audio/x-pn-realaudio")-1},
+		{HNMT_MTM_AUDIO_X_WAV		,(unsigned char*)"audio/x-wav",							sizeof("audio/x-wav")-1},
+		{HNMT_MTM_VIDEO_MPEG2TS		,(unsigned char*)"video/MP2T",							sizeof("video/MP2T")-1},
+
+		{HNMT_MTM_UNDEFINED			,0L,													0}			/* invalid mime type - stop bad code blowing up! */
+};
+
+static unsigned char	fred_bloggs = 0x0000;
+static unsigned char	fred_bloggs1 = "DDDDDDDD";
+static unsigned char 	fred_blocks3 = FFFFFFFFFFF;
+
+/** @end_constants: */
 
 /*--------------------------------------------------------------------------------*
  * Silly test functions for some corner cases.
@@ -274,17 +370,19 @@ unsigned int	DGTF_IF_AddBoolean(unsigned char* buffer, unsigned int buffer_offse
 }
 
 /**---- FUNCTION -----------------------------------------------------------------*
- * @api: DGTF_IF_AddInt
- * @desc: 	This function adds an integer to the buffer.
- * @action: DDTF_AddInt adds an integer to the output packet. 
- *   
- *          It adds the integer in the correct format for the packet that is
- *          being sent.
- * @parameter:	buffer			This is the buffer to add the integer to.
- * @parameter:	buffer_offset	The offset of the buffer to write to.
- * @parameter:	name			The name of the int to add.
- * @parameter:	name_length		The length of the name to add.
- * @parameter:	value			The integer to write.
+ * @api			 DGTF_IF_AddInt
+ * @desc		 	This function adds an integer to the buffer.
+ * @action 
+ * 		   :      DDTF_AddInt adds an integer to the output packet. 
+ *         :
+ *         :      It adds the integer in the correct format for the packet that is
+ *         :      being sent.
+ *         :      this.
+ * @parameter	buffer			This is the buffer to add the integer to.
+ * @parameter	buffer_offset	The offset of the buffer to write to.
+ * @parameter	name			The name of the int to add, this description needs to be really long so that we can test the clipping of the thing so that it works correctly.
+ * @parameter	name_length		The length of the name to add.
+ * @parameter	value			The integer to write.
  *
  * @returns:	0 	If it worked.
  * @returns:	1	If it failed.

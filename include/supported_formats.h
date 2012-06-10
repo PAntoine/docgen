@@ -100,6 +100,7 @@ typedef void			(*OUTPUT_CLOSE_FUNCTION)			(DRAW_STATE* draw_state);
 typedef void			(*OUTPUT_HEADER_FUNCTION)			(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length);
 typedef void			(*OUTPUT_FOOTER_FUNCTION)			(DRAW_STATE* draw_state);
 typedef void			(*OUTPUT_RAW_FUNCTION)				(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buffer_size);
+typedef void			(*OUTPUT_SAMPLE_FUNCTION)			(DRAW_STATE* draw_state, SAMPLE* sample);
 
 typedef void			(*OUTPUT_TIMELINES_FUNCTION)		(DRAW_STATE* draw_state, TIMELINE* timeline);
 typedef void			(*OUTPUT_MESSAGE_FUNCTION)			(DRAW_STATE* draw_state, MESSAGE* message);
@@ -128,13 +129,14 @@ typedef struct
 {
 	unsigned char*				format_name;
 	unsigned int				format_name_length;
-	
+
 	/* generic functions called for all diagrams */
 	OUTPUT_OPEN_FUNCTION		output_open;
 	OUTPUT_CLOSE_FUNCTION		output_close;
 	OUTPUT_HEADER_FUNCTION		output_header;	
 	OUTPUT_FOOTER_FUNCTION		output_footer;
 	OUTPUT_RAW_FUNCTION			output_raw;
+	OUTPUT_SAMPLE_FUNCTION		output_sample;
 
 	/* sequence diagram functions */
 	OUTPUT_TIMELINES_FUNCTION	output_timelines;
@@ -183,9 +185,11 @@ struct tag_draw_state
 	unsigned int	buffer_size;
 	unsigned int	format;
 	unsigned int	path_length;
+	unsigned int	page_width;				/* this is a type dependant page width */
 	unsigned char	path[FILENAME_MAX];
 	unsigned char*	buffer;
-	
+	unsigned char*	output_buffer;			/* random buffer controlled by the type code */
+
 	union
 	{
 		SEQUENCE_DRAW_STATE	sequence;
@@ -208,6 +212,7 @@ void			text_close(DRAW_STATE* draw_state);
 void			text_output_header(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length);
 void			text_output_footer(DRAW_STATE* draw_state);
 void			text_output_raw(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buffer_size);
+void			text_output_sample(DRAW_STATE* draw_state, SAMPLE* sample);
 void			text_output_message(DRAW_STATE* draw_state, MESSAGE* message);
 void			text_output_timelines(DRAW_STATE* draw_state, TIMELINE* timeline);
 void			text_output_states(DRAW_STATE* draw_state, STATE* list);

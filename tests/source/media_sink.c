@@ -23,6 +23,8 @@ void	play_media()
 	 * @to: media_source
 	 */
 
+	/** @sample test_one */
+
 	/**
 	 * @waitfor: SEND_TRACK_DATA
 	 */
@@ -35,6 +37,8 @@ void	play_media()
 	 * been done.
 	 */
 }
+
+/** @end_sample */
 
 void main_loop()
 {
