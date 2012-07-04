@@ -100,7 +100,6 @@ unsigned int	handle_multiline(	DRAW_STATE* 	draw_state,
 		clip_point++;
 	}
 
-
 	return clip_point;
 }
 
@@ -116,7 +115,7 @@ unsigned int	handle_wrapping(	DRAW_STATE* 	draw_state,
 									unsigned int	text_block_remaining)
 {
 	/* as the brief is a text description then word wrapping should be observed */
-	unsigned int wrap_point = draw_state->page_width;
+	unsigned int wrap_point = draw_state->page_width - text_block_offset;
 
 	if ((flags & FORMAT_WORD_WRAP) != 0)
 	{
@@ -134,6 +133,7 @@ unsigned int	handle_wrapping(	DRAW_STATE* 	draw_state,
 	}
 
 	memcpy(&draw_state->output_buffer[text_block_offset],&text_block->name[text_block_copied],wrap_point);
+	memset(&draw_state->output_buffer[text_block_offset+wrap_point],' ',draw_state->page_width - text_block_offset - wrap_point);
 
 	return wrap_point;
 }
@@ -340,19 +340,24 @@ unsigned int	write_complex (	DRAW_STATE* draw_state, NAME* text_block, unsigned 
  * @desc: This function will output a block of text.
  *        it will use the flags passed in to format the text.
  *--------------------------------------------------------------------------------*/
-static void	write_block_text(DRAW_STATE* draw_state, NAME* text_block, unsigned int flags)
+static void	write_block_text(DRAW_STATE* draw_state, NAME* text_block, unsigned int flags,unsigned int margin)
 {
 	unsigned int clipped;
 	unsigned int text_used = 0;
 	unsigned int text_block_copied = 0;
-	unsigned int text_block_offset = 0;
+	unsigned int text_block_offset = margin;
 	unsigned int text_block_remaining = text_block->name_length;
 	
+	if (margin > 0)
+	{
+		memset(draw_state->output_buffer,' ',margin);
+	}
+
 	do
 	{
 		clipped = 0;
 	
-		if (text_block_remaining > draw_state->page_width)
+		if ((text_block_remaining + margin) > draw_state->page_width)
 		{
 			if ((flags & FORMAT_MULTILINE) != 0)
 			{
@@ -370,13 +375,28 @@ static void	write_block_text(DRAW_STATE* draw_state, NAME* text_block, unsigned 
 		else
 		{
 			memcpy(&draw_state->output_buffer[text_block_offset],&text_block->name[text_block_copied],text_block_remaining);
-			memset(&draw_state->output_buffer[text_block_offset+text_block_remaining],' ',draw_state->page_width - text_block_remaining);
+			memset(&draw_state->output_buffer[text_block_offset+text_block_remaining],' ',
+					(draw_state->page_width - text_block_remaining - text_block_offset));
 			text_block_remaining = 0;
 		}
 
 		write(draw_state->output_file,draw_state->output_buffer,draw_state->page_width+1);
 	}
 	while (clipped && ((flags & (FORMAT_WRAP|FORMAT_MULTILINE)) != 0));
+}
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: text_decode_flags_function
+ * @desc: This function will decode the flags.
+ *--------------------------------------------------------------------------------*/
+unsigned int	text_decode_flags_function(INPUT_STATE* input_state, unsigned int hash, NAME* value)
+{
+	unsigned int result = 0;
+
+	printf("decode\n");
+
+	return result;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -461,7 +481,7 @@ void	text_output_raw(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int
  *--------------------------------------------------------------------------------*/
 void	text_output_sample(DRAW_STATE* draw_state, SAMPLE* sample)
 {
-	write_block_text(draw_state,&sample->sample,FORMAT_MULTILINE);
+	write_block_text(draw_state,&sample->sample,FORMAT_MULTILINE,0);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -917,7 +937,7 @@ void	text_output_api_description_function(DRAW_STATE* draw_state, API_FUNCTION* 
 
 	if (function->description.name_length > 0)
 	{
-		write_block_text(draw_state,&function->description,(FORMAT_WRAP|FORMAT_WORD_WRAP));
+		write_block_text(draw_state,&function->description,(FORMAT_WRAP|FORMAT_WORD_WRAP),0);
 		write(draw_state->output_file,"\n",1);
 	}
 	write(draw_state->output_file,"\n",1);
@@ -955,7 +975,7 @@ void	text_output_type_description_function(DRAW_STATE* draw_state, API_TYPE* typ
 
 	if (type->description.name_length > 0)
 	{
-		write_block_text(draw_state,&type->description,(FORMAT_WRAP|FORMAT_WORD_WRAP));
+		write_block_text(draw_state,&type->description,(FORMAT_WRAP|FORMAT_WORD_WRAP),0);
 		write(draw_state->output_file,"\n",1);
 	}
 	write(draw_state->output_file,"\n",1);
@@ -1058,7 +1078,7 @@ void	text_output_constants_description_function(DRAW_STATE* draw_state, API_CONS
 
 	if (constants->description.name_length > 0)
 	{
-		write_block_text(draw_state,&constants->description,(FORMAT_WRAP|FORMAT_WORD_WRAP));
+		write_block_text(draw_state,&constants->description,(FORMAT_WRAP|FORMAT_WORD_WRAP),0);
 		write(draw_state->output_file,"\n",1);
 	}
 	write(draw_state->output_file,"\n",1);
@@ -1236,6 +1256,240 @@ void	text_output_constants_records_function(DRAW_STATE* draw_state, API_CONSTANT
 	}
 			
 	write(draw_state->output_file,"\n",1);
+}
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: text_output_application_name_function
+ * @desc: This function will output the applications name.
+ *--------------------------------------------------------------------------------*/
+void	text_output_application_name_function(DRAW_STATE* draw_state,APPLICATION* application,NAME* name)
+{
+	write(draw_state->output_file,"Name: ",sizeof("name: ")-1);
+	write(draw_state->output_file,name->name,name->name_length);
+	write(draw_state->output_file,"\n\n",2);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: text_output_application_synopsis_function
+ * @desc: 
+ *--------------------------------------------------------------------------------*/
+void	text_output_application_synopsis_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name)
+{
+	SYNOPSIS*		synopsis;
+	unsigned int	count;
+	unsigned int	offset;
+
+	if (application->synopsis != NULL)
+	{
+		synopsis = application->synopsis;
+		write(draw_state->output_file,"Synopsis\n",9);
+
+		while (synopsis != NULL)
+		{
+			draw_state->output_buffer[0] = ' ';
+			draw_state->output_buffer[1] = ' ';
+			draw_state->output_buffer[2] = ' ';
+			draw_state->output_buffer[3] = ' ';
+
+			memcpy(&draw_state->output_buffer[4],application->name.name,application->name.name_length);
+
+			offset = application->name.name_length + 4;
+
+			if ((parts & OUTPUT_APPLICATION_MULTIPLE) || compare_name(&synopsis->name,&name) == 0)
+			{
+				if (synopsis->list != NULL)
+				{
+					for (count=0; count < synopsis->list_length; count++)
+					{
+						draw_state->output_buffer[offset++] = ' ';
+						
+						if ((synopsis->list[count]->flags & OPTION_FLAG_REQUIRED) == 0)
+						{
+							draw_state->output_buffer[offset++] = '[';
+						}
+
+						memcpy(&draw_state->output_buffer[offset],synopsis->list[count]->name.name,synopsis->list[count]->name.name_length);
+						offset += synopsis->list[count]->name.name_length;
+
+						if (synopsis->list[count]->value.name_length > 0)
+						{
+							draw_state->output_buffer[offset++] = ' ';
+							memcpy(&draw_state->output_buffer[offset],synopsis->list[count]->value.name,synopsis->list[count]->value.name_length);
+
+							offset += synopsis->list[count]->value.name_length;
+						}
+						
+						if ((synopsis->list[count]->flags & OPTION_FLAG_MULTIPLE) != 0)
+						{
+							draw_state->output_buffer[offset++] = '.';
+							draw_state->output_buffer[offset++] = '.';
+							draw_state->output_buffer[offset++] = '.';
+						}
+
+						if ((synopsis->list[count]->flags & OPTION_FLAG_REQUIRED) == 0)
+						{
+							draw_state->output_buffer[offset++] = ']';
+						}
+					}
+				}
+			}
+						
+			draw_state->output_buffer[offset++] = '\n';
+			write(draw_state->output_file,draw_state->output_buffer,offset);
+			
+			synopsis = synopsis->next;
+		}
+	
+		write(draw_state->output_file,"\n",1);
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: text_output_application_option_function
+ * @desc: 
+ *--------------------------------------------------------------------------------*/
+void	text_output_application_option_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name)
+{
+	OPTION*			option;
+	TABLE_ROW		table_row;
+	TABLE_LAYOUT	table_layout;
+	
+	if (application->option_list != NULL)
+	{
+		table_layout.num_columns = 2;
+		table_layout.column[0].flags = 0;
+		table_layout.column[1].flags = (FORMAT_WRAP|FORMAT_WORD_WRAP);
+
+		table_layout.column[0].width = 10;
+		table_layout.column[1].width = draw_state->page_width - 18;
+
+		table_layout.column[0].offset = 4;
+		table_layout.column[1].offset = application->max_option_length + 4;
+
+		write(draw_state->output_file,"Options\n",8);
+
+		draw_state->output_buffer[draw_state->page_width] = '\n';
+
+		/* now write the options to the file */
+		option = application->option_list;
+
+		while (option != NULL)
+		{
+			if ((parts & OUTPUT_APPLICATION_MULTIPLE) || compare_name(&option->name,&name) == 0)
+			{
+				table_row.row[0] = &option->name;
+				table_row.row[1] = &option->value;
+
+				memset(draw_state->output_buffer,' ',draw_state->page_width);
+				text_draw_table_row(draw_state,&table_layout,&table_row);
+
+				write_block_text(draw_state,&option->description,(FORMAT_WRAP|FORMAT_WORD_WRAP),application->max_option_length + 4);
+				write(draw_state->output_file,"\n",1);
+			}
+
+			option = option->next;
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: text_output_application_command_function
+ * @desc: This function will output the list of commands to the output.
+ *--------------------------------------------------------------------------------*/
+void	text_output_application_command_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name)
+{
+	COMMAND*		command;
+	TABLE_ROW		table_row;
+	TABLE_LAYOUT	table_layout;
+	
+	if (application->command_list != NULL)
+	{
+		table_layout.num_columns = 2;
+		table_layout.column[0].flags = 0;
+		table_layout.column[1].flags = (FORMAT_WRAP|FORMAT_WORD_WRAP);
+
+		table_layout.column[0].width = 10;
+		table_layout.column[1].width = draw_state->page_width - 18;
+
+		table_layout.column[0].offset = 4;
+		table_layout.column[1].offset = 10;
+
+		write(draw_state->output_file,"Commands:\n",9);
+
+		draw_state->output_buffer[draw_state->page_width] = '\n';
+
+		/* now write the commands to the file */
+		command = application->command_list;
+
+		while (command != NULL)
+		{
+			if ((parts & OUTPUT_APPLICATION_MULTIPLE) || compare_name(&command->name,&name) == 0)
+			{
+				table_row.row[0] = &command->name;
+				table_row.row[1] = &command->parameters;
+
+				memset(draw_state->output_buffer,' ',draw_state->page_width);
+				text_draw_table_row(draw_state,&table_layout,&table_row);
+
+				write_block_text(draw_state,&command->description,(FORMAT_WRAP|FORMAT_WORD_WRAP),10);
+				write(draw_state->output_file,"\n",1);
+			}
+
+			command = command->next;
+		}
+	}
+}
+
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: handle_section
+ * @desc: This function will output the given sections.
+ *--------------------------------------------------------------------------------*/
+void	handle_section(DRAW_STATE* draw_state, SECTION* section)
+{
+	write(draw_state->output_file,section->name.name,section->name.name_length);
+	write(draw_state->output_file,"\n",1);
+
+	if (section->section_data.name_length > 0)
+	{
+		write_block_text(draw_state,&section->section_data,(FORMAT_WRAP|FORMAT_WORD_WRAP),4);
+		write(draw_state->output_file,"\n",1);
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: text_output_application_section_function
+ * @desc: This function will output the section.
+ *--------------------------------------------------------------------------------*/
+void	text_output_application_section_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name)
+{
+	SECTION*	section;
+	SECTION*	sub_section;
+
+	section = application->section_list;
+	
+	while (section != NULL)
+	{
+		if ((parts & OUTPUT_APPLICATION_MULTIPLE) || compare_name(&section->name,&name) == 0)
+		{
+			handle_section(draw_state,section);
+
+			if (section->sub_section_list != NULL)
+			{
+				sub_section = section->sub_section_list;
+
+				while (sub_section != NULL)
+				{
+					handle_section(draw_state,sub_section);
+
+					sub_section = sub_section->next;
+				}
+			}
+		}
+
+		section = section->next;
+	}
 }
 
 

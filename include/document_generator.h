@@ -33,6 +33,9 @@
 
 #define FILE_BLOCK_SIZE		(16 * 1024)
 
+/* note: if you make this bigger the 255 then the output_synopsis function will have to change */
+#define MAX_NUM_OPTIONS		(255)
+
 /*--------------------------------------------------------------------------------*
  * File header format
  *--------------------------------------------------------------------------------*/
@@ -72,13 +75,16 @@
 #define INTERMEDIATE_RECORD_START		(11)
 #define INTERMEDIATE_RECORD_END			(12)
 #define INTERMEDIATE_RECORD_SAMPLE		(13)
+#define INTERMEDIATE_RECORD_BOOLEAN		(14)
+#define INTERMEDIATE_RECORD_APPLICATION	(15)
 
 /* record format */
 #define RECORD_TYPE			(0)
 #define RECORD_ATOM			(1)
-#define RECORD_GROUP		(2)		/* group and functions share the same field */ 
-#define RECORD_FUNCTION		(2) 	/* group and functions share the same field */ 
-#define RECORD_API			(2) 
+#define RECORD_GROUP		(2)		/* group and api and function and application share the same field */ 
+#define RECORD_FUNCTION		(2) 	/* group and api and function and application share the same field */ 
+#define RECORD_API			(2) 	/* group and api and function and application share the same field */
+#define RECORD_APPLICATION	(2) 	/* group and api and function and application share the same field */
 #define RECORD_BLOCK_NUM	(4) 
 #define RECORD_LINE_NUM		(6)
 #define RECORD_DATA_SIZE	(8) 
@@ -88,9 +94,9 @@
 #define RECORD_FUNCTION_FLAG	(0xC000)
 #define RECORD_API_FLAG			(0x8000)
 
-#define RECORD_GROUP_TYPE		(0x01)	/** @brief	The record group contains a single type */
-#define RECORD_GROUP_RECORD		(0x02)	/** @brief	The record group contains a record structure */
-#define RECORD_GROUP_CONSTANT	(0x03)	/** @brief	The record group contains a constant */
+#define RECORD_GROUP_TYPE		(0x01)	/* The record group contains a single type */
+#define RECORD_GROUP_RECORD		(0x02)	/* The record group contains a record structure */
+#define RECORD_GROUP_CONSTANT	(0x03)	/* The record group contains a constant */
 
 /*--------------------------------------------------------------------------------*
  * linker file format
@@ -114,7 +120,7 @@
 
 #define LINKER_MAX_RECORD_SIZE		(512)
 
-/* record defintions:
+/* record definitions:
  *  all data items are size,bytes for strings. BYTE = 1 byte, SHORT = 2 bytes, and
  *  LONG = 4 bytes.
  *
@@ -142,46 +148,59 @@
  *	linker_api_parameter		= {string:type,string:name,string:brief}
  *	linker_api_function_end		= {}
  *	linker_api_end				= {}
+ *	linker_sample				= {string:name,string:sample}
+ *	linker_application_start	= {string:name}
+ *	linker_application_section	= {string:name,long_string:details}
+ *	linker_application_option	= {short:flags,string:name,string:value,string:description}
+ *	linker_application_synopsis	= {string:name,byte_list:(option_index)}
+ *	linker_application_end		= {}
  */
 
-#define LINKER_TRIGGER				( 0)	/* defines a trigger */
-#define LINKER_TRIGGERS				( 1)	/* define a triggers */
-#define LINKER_CONDITION			( 2)	/* defines a condition */
-#define LINKER_SOURCE_FILE			( 3)	/* defines a source file reference */
-#define LINKER_SOURCE_REFERENCE		( 4)	/* defines a source line reference */
-#define	LINKER_END					( 5)	/* the end of a list of items */
-#define LINKER_BLOCK_END			( 6)	/* the end of a block - NULL record */
+#define LINKER_TRIGGER					( 0)	/* defines a trigger */
+#define LINKER_TRIGGERS					( 1)	/* define a triggers */
+#define LINKER_CONDITION				( 2)	/* defines a condition */
+#define LINKER_SOURCE_FILE				( 3)	/* defines a source file reference */
+#define LINKER_SOURCE_REFERENCE			( 4)	/* defines a source line reference */
+#define	LINKER_END						( 5)	/* the end of a list of items */
+#define LINKER_BLOCK_END				( 6)	/* the end of a block - NULL record */
 
-#define LINKER_GROUP				( 6)	/* defines A group name */
-#define LINKER_STATE_MACHINE_START	( 8)	/* defines the start of a state machine */
-#define LINKER_STATE				( 9)	/* the start of a state list */
-#define LINKER_TRANSITON			(10)	/* defines a transition between two states */
-#define LINKER_STATE_MACHINE_END	(11)	/* denotes the end of a state machine */
-#define LINKER_SEQUENCE_START		(12)	/* denotes the start of a sequence diagram */
-#define	LINKER_TIMELINE				(13)	/* defines a timeline */
-#define LINKER_FUNCTION				(14)	/* a function name definition */
-#define LINKER_MESSAGE				(15)	/* defines a message */
-#define LINKER_PARAMETER			(16)	/* denotes the start of a sequence diagram */
-#define LINKER_NODE_START			(17)	/* node start */
-#define LINKER_SENT_MESSAGE			(18)	/* references a message that is being send from this node */
-#define LINKER_NODE_END				(19)	/* node start */
-#define LINKER_SEQUENCE_END			(20)	/* denotes the end of a sequence diagram */
-#define	LINKER_API_START			(21)	/* the start of the api */
-#define	LINKER_API_FUNCTION			(22)	/* the function prototype */
-#define	LINKER_API_ACTION			(23)	/* the actions for the function */
-#define	LINKER_API_DESCRIPTION		(24)	/* the description of the function */
-#define	LINKER_API_PARAMETER		(25)	/* a parameter to the api */
-#define	LINKER_API_RETURNS			(26)	/* a return value for the api */
-#define	LINKER_API_FUNCTION_END		(27)	/* the end of the function */
-#define LINKER_API_TYPE_START		(28)	/* the type start */
-#define LINKER_API_TYPE_FIELD		(29)	/* a field of the type */
-#define	LINKER_API_TYPE_END			(30)	/* the end of the type */
-#define LINKER_API_CONSTANTS_START	(31)	/* start of a constant group */
-#define LINKER_API_CONSTANT			(32)	/* a constant */
-#define LINKER_API_DATA_CONSTANT	(33)	/* a data constant */
-#define	LINKER_API_CONSTANTS_END	(34)	/* the end of a constant group */
-#define	LINKER_API_END				(35)	/* the end of the api */
-#define	LINKER_SAMPLE				(36)	/* a sample */
+#define LINKER_GROUP					( 6)	/* defines A group name */
+#define LINKER_STATE_MACHINE_START		( 8)	/* defines the start of a state machine */
+#define LINKER_STATE					( 9)	/* the start of a state list */
+#define LINKER_TRANSITON				(10)	/* defines a transition between two states */
+#define LINKER_STATE_MACHINE_END		(11)	/* denotes the end of a state machine */
+#define LINKER_SEQUENCE_START			(12)	/* denotes the start of a sequence diagram */
+#define	LINKER_TIMELINE					(13)	/* defines a timeline */
+#define LINKER_FUNCTION					(14)	/* a function name definition */
+#define LINKER_MESSAGE					(15)	/* defines a message */
+#define LINKER_PARAMETER				(16)	/* denotes the start of a sequence diagram */
+#define LINKER_NODE_START				(17)	/* node start */
+#define LINKER_SENT_MESSAGE				(18)	/* references a message that is being send from this node */
+#define LINKER_NODE_END					(19)	/* node start */
+#define LINKER_SEQUENCE_END				(20)	/* denotes the end of a sequence diagram */
+#define	LINKER_API_START				(21)	/* the start of the api */
+#define	LINKER_API_FUNCTION				(22)	/* the function prototype */
+#define	LINKER_API_ACTION				(23)	/* the actions for the function */
+#define	LINKER_API_DESCRIPTION			(24)	/* the description of the function */
+#define	LINKER_API_PARAMETER			(25)	/* a parameter to the api */
+#define	LINKER_API_RETURNS				(26)	/* a return value for the api */
+#define	LINKER_API_FUNCTION_END			(27)	/* the end of the function */
+#define LINKER_API_TYPE_START			(28)	/* the type start */
+#define LINKER_API_TYPE_FIELD			(29)	/* a field of the type */
+#define	LINKER_API_TYPE_END				(30)	/* the end of the type */
+#define LINKER_API_CONSTANTS_START		(31)	/* start of a constant group */
+#define LINKER_API_CONSTANT				(32)	/* a constant */
+#define LINKER_API_DATA_CONSTANT		(33)	/* a data constant */
+#define	LINKER_API_CONSTANTS_END		(34)	/* the end of a constant group */
+#define	LINKER_API_END					(35)	/* the end of the api */
+#define	LINKER_SAMPLE					(36)	/* a sample */
+#define	LINKER_APPLICATION_START		(37)	/* the start of an application group */
+#define	LINKER_APPLICATION_SECTION		(38)	/* a section for describing the application */
+#define	LINKER_APPLICATION_SUB_SECTION	(39)	/* a section for describing the application */
+#define	LINKER_APPLICATION_OPTION		(40)	/* application option */
+#define	LINKER_APPLICATION_COMMAND		(41)	/* application command */
+#define	LINKER_APPLICATION_SYNOPSIS		(42)	/* application synopsis */
+#define	LINKER_APPLICATION_END			(43)	/* application end */
 
 /*--------------------------------------------------------------------------------*
  * general useful structures.
@@ -303,6 +322,18 @@ typedef struct
 
 } ATOM_TYPE_NUMBER;
 
+typedef struct
+{
+	unsigned int	type;
+	unsigned int	line;
+	unsigned int	atom;
+	unsigned int	block;
+	unsigned int	func_api;
+	unsigned int	api;
+	unsigned int	true_false;
+
+} ATOM_TYPE_BOOLEAN;
+
 typedef union
 {
 	ATOM_TYPE_ANY		any;
@@ -311,6 +342,7 @@ typedef union
 	ATOM_TYPE_TYPE		type;
 	ATOM_TYPE_NUMBER	number;
 	ATOM_TYPE_STRING	string;
+	ATOM_TYPE_BOOLEAN	boolean;
 
 } ATOM_ITEM;
 
@@ -635,6 +667,77 @@ typedef struct
 	GROUP*			group;				/* the owner group */	
 } API;
 
+/* application group of atoms */
+#define	OPTION_FLAG_MULTIPLE	((unsigned int) 0x00000001)
+#define OPTION_FLAG_REQUIRED	((unsigned int) 0x00000002)
+
+typedef struct tag_option
+{
+	unsigned int		flags;
+	unsigned int		option_id;
+	NAME				name;
+	NAME				value;
+	NAME				description;
+
+	struct tag_option*	last;
+	struct tag_option*	next;
+} OPTION;
+
+typedef struct tag_command
+{
+	NAME				name;
+	NAME				parameters;
+	NAME				description;
+
+	struct tag_command*	last;
+	struct tag_command*	next;
+} COMMAND;
+
+typedef struct tag_section
+{
+	NAME				name;
+	NAME				section_data;
+	struct tag_section*	sub_section_list;
+	
+	struct tag_section*	last;
+	struct tag_section*	next;
+
+} SECTION;
+
+typedef struct tag_synopsis
+{
+	unsigned int			list_length;
+	NAME					name;
+	OPTION**				list;
+	
+	struct tag_synopsis*	last;
+	struct tag_synopsis*	next;
+} SYNOPSIS;
+
+typedef struct tag_synopsis_list
+{
+	NAME		name;
+	NAME		items;
+
+	struct tag_synopsis_list*	last;
+	struct tag_synopsis_list*	next;
+
+} SYNOPSIS_LIST;
+
+typedef struct tag_application
+{
+	NAME			name;				/* the name of the application */
+	OPTION*			option_list;		/* the list of options that belong to this application */
+	COMMAND*		command_list;		/* the list of commands that belong to this application */
+	SECTION*		section_list;		/* the list of sections that belong to this application */
+	SYNOPSIS*		synopsis;			/* the connected synopsis - used in the processor */
+	SYNOPSIS_LIST	synopsis_list;		/* the list of synopsis items - that are read from the input */
+	unsigned int	max_option_length;	/* the length of the largest option */
+
+	struct tag_application*	next;
+
+} APPLICATION;
+
 /* global pull it all together structure */
 
 struct tag_group
@@ -645,12 +748,15 @@ struct tag_group
 	SEQUENCE_DIAGRAM*	sequence_diagram;	/* if not NULL the sequence diagram that belongs to this group */
 	STATE_MACHINE*		state_machine;		/* if not NULL the state machine that belongs to this group */
 	API*				api;				/* if not NULL the api definitions that belong to this group */
+	APPLICATION*		application;		/* if not NULL the application details that belong to this group */
 	TRIGGER*			trigger_list;		/* the list of triggers that belong to this list */
 	SAMPLE*				sample_list;		/* the list of samples that belong to the group */
 	struct tag_group*	next;				/* the next group in the list */
 };
 
-/* decoder defines */
+/*--------------------------------------------------------------------------------*
+ * Decoder defines.
+ *--------------------------------------------------------------------------------*/
 typedef struct tag_deferred_list
 {
 	NODE*			node;
@@ -679,6 +785,8 @@ typedef struct
 	unsigned int		activation;				/* the activation that this belongs to */
 	unsigned int		num_returns;			/* the number of return values */
 	unsigned int		num_parameters;			/* the number of parameters */
+	unsigned int		application_id;			/* the current application */
+	unsigned int		application_flag;		/* the flags set for the application */
 	STATE*				state;					/* state that this block belongs to */
 	GROUP*				group;					/* the group that the node belongs to */
 	FUNCTION*			function;				/* the function that the node belongs to */
@@ -696,6 +804,8 @@ typedef struct
 	BLOCK_NAME			sequence;				/* the message waits for the message to arrive, or responds to it */
 	BLOCK_NAME			condition;				/* if this is a state then the condition for the transition */
 	BLOCK_NAME			transition;				/* if this is a state then transition */
+	NAME				value;					/* the value of the option */
+	NAME				option;					/* the option */
 	NAME				action;					/* this block contains an action */
 	NAME				description;			/* this block contains a description */
 	NAME_PAIRS_LIST		returns;				/* list of return pairs from the header block */
@@ -728,12 +838,14 @@ typedef struct
 #define	MODEL_LOAD_STATE					(1)
 #define	MODEL_LOAD_SEQUENCE					(2)
 #define	MODEL_LOAD_API						(3)
+#define	MODEL_LOAD_APPLICATION				(4)
 
 #define TYPE_TEXT							(0)
 #define TYPE_STATE_MACHINE					(1)
 #define TYPE_SEQUENCE_DIAGRAM				(2)
 #define TYPE_API							(3)
 #define TYPE_SAMPLE							(4)
+#define TYPE_APPLICATION					(5)
 
 #define FORMAT_WRAP							(0x0001)
 #define	FORMAT_WORD_WRAP					(0x0002)
@@ -745,7 +857,8 @@ typedef struct
 #define	INPUT_STATE_INTERNAL_GROUP_COLLECT	(2)
 #define	INPUT_STATE_INTERNAL_TYPE_COLLECT	(3)
 #define	INPUT_STATE_INTERNAL_ITEM_COLLECT	(4)
-#define	INPUT_STATE_INTERNAL_DUMP_TILL_END	(5)
+#define	INPUT_STATE_INTERNAL_FIND_FLAGS		(5)
+#define	INPUT_STATE_INTERNAL_DUMP_TILL_END	(6)
 
 
 /* loading list */
@@ -787,14 +900,16 @@ typedef struct
 	unsigned int	output_end;
 	unsigned int	model_pos;
 	unsigned int	item_length;
+	unsigned int	flags_length;
 	unsigned int	group_length;
+	unsigned int	line_number;
 	unsigned char*	input_name;
+	unsigned char*	flags;
 	unsigned char	buffer[FILE_BLOCK_SIZE];
 	unsigned char	item_name[MAX_NAME_LENGTH];
 	unsigned char	group_name[MAX_NAME_LENGTH];
 
 } INPUT_STATE;
-
 
 /*--------------------------------------------------------------------------------*
  * shared functions

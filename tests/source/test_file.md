@@ -73,7 +73,7 @@ API tests
 
 Dump the full API for the default group:
 
-[model:/default/api]
+[model:/default/api?paged=true,margin=8]
 
 Now dump the API for the config_file_api group:
 
@@ -127,4 +127,6 @@ Now Test to see if the samples work
 Dumping the first test sample:
 
 [model:/default/sample/test_three]
+
+
 

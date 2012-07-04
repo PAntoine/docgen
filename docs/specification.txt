@@ -425,7 +425,7 @@ far as the processor is concerned.
 
 4.4.4.3 Validity of API Atoms.
  4.4.4.3.1 One one @api will be allowed in a comment block.
- 4.4.4.3.2 Only one` @brief will be accept in a block.
+ 4.4.4.3.2 Only one @brief will be accept in a block.
  4.4.4.3.3 @action must follow a @api or be in an @api block.
  4.4.4.3.4 @action will be attached to any previous @action found for the the @api.
  4.4.4.3.5 @api must be before the function.
@@ -463,48 +463,60 @@ The above defines a field in the record.
  4.4.4.5.2 The @type and @defines must come before a data type or a #define respectively.
  4.4.4.5.3 @end_define must only be used after a @define and after at least one #define.
 
-4.4.6 Manual ATOMS
+4.4.6 Application ATOMS
 The Usage atoms are there to be able to describe the usage of an application. This will allow for the man pages for
 the application to be generated from the code.
 
-4.4.6.1 Structure of Manual ATOMS
-The usage atoms are based on the ones required to produce man pages. But they in and amongst themselves do not have a structure.
+4.4.6.1 Structure of Application ATOMS
+The usage atoms are based on the ones required to produce man pages. As a man page can have any structure that you care for
+the atoms are quite free form to allow for the user to structure the manual pages as they see fit. If the application has
+a command line the synopsis for the command line can be generated from the @option atoms. Also, if the function has internal
+commands these can be formatted from the @command atom.
 
-4.4.6.2 Valid atoms for Manual
-@name:	{name of the application}
+4.4.6.2 Valid atoms for Application
+@application:	{name of the application}
 This is the name of the application as will displayed in the manual pages.
 
 @group: {group name}
 The group that the atom belongs to.
 
-@synopsis: {string}
+@option: {option description}
+This is the option. It is a single word in a free format. I.e. -p or --path or path, it is up to the application type to
+define this.
+
+@required:	{yes}|{no}
+If this is within a option block defines if the option is required on the command line. If the option is within an named
+option, it defines if the option is required within the option group.
+
+@multiple:	{yes}|{no}
+This atom states that the atom can accept multiple values.
+
+@command:	{name}	{brief description}
+This is a command that goes in to the command list.
+
+@section: {section name}
+This defines the section. All the text that follows the atom will be part of the section.
+
+@subsection:	{sub-section name}
+As with the @section this defines the subsection and the text of the section will follow the atom.
+
+@synopsis: {name}	{list of options}
 This is the standard synopsis of the application flags and usage.
 
 @desc: {multi-line description of the application}
 The basic description of the application.
 
-@examples: {multi-line set of usage examples of the function}
-As stated.
+@value:	 {definition of the values that are supported}
+This defines the values that are allowed for the option.
 
-@see also: {string list}
-A list of applications that are part of the application family or are connected to the application.
-
-@copyright: {a copyright string}
-This atom defines a copyright holder.
-
-@licence: {licence name}
-The name of the licence that the application is released under.
-
-@option: {option description}
-The atom is a one-line definition of the option that is defined.
-
-@author: {author name}
-A name of the person that coded the application.
-
-4.4.6.3 Validity of Manual ATOMS
- 4.4.6.3.1 The @name, @examples, @copyright, @ licence and @author atoms should appear in the @file block.
- 4.4.6.3.2 Only one @name will be accepted in the Manual group.
- 4.4.6.3.3 The man page should have the following @name, @synopsis and @desc as a minimum.
+4.4.6.3 Validity of Application ATOMS
+ 4.4.6.3.1 There must be a least 1 @application atom within the source file.
+ 4.4.6.3.2 All other atoms will bind to the last @application atom.
+ 4.4.6.3.3 @value must follow a @option and will bind with the nearest one in the same file.
+ 4.4.6.3.4 @required and @multiple must follow a @option and will bind with the nearest one in the same file.
+ 4.4.6.3.5 If there is a @section or @subsection is found then it is added to the end of the section. If this
+           happens across source files then the order that they are added is not defined and they should be
+		   written to handle this.
 
 4.5 Intermediate object file format.
 
@@ -687,4 +699,43 @@ The special group thing for the constants:
 
 and @end_constants
 
+4.7.2 Format of the outputs
+
+The format of the data groups can be changed. The way this is done is by passing parameters to the model url.
+The parameters are passed in the REST style as this will stay with the theme of using URLs as parts.
+
+The three groups of format parameters are, layout, format, style.
+
+The formats are added to the end of the model: url, in the following format:
+
+[model:/test_1/api/function?format=text&stype=paged]
+[model:/test_1/api/start_function/name?format=text&stype=inline]
+
+4.7.2.1 FORMAT
+
+This group will define what format the item is output in. Not all items support all of the main formats support
+all of the known output formats, but if it is not supported then it will fall back to the default for the
+output type.
+
+i.e. 
+format=dot
+format=text
+
+The first will produce the output for the item in dot format, and the second will produce the output in a text
+format. As specified above this is a suggestion to the output function for the format that the user requests.
+
+4.7.2.2 LAYOUT
+
+This tells the output function what layout that the style allows. This allows for, say a state machine to be
+laid out either as a table or a graph (obviously each of the styles will have a layout format of its own).
+
+i.e.
+layout=table
+layout=graph
+
+4.7.2.3 STYLE
+
+This is a comma separated list of styles that are to apply to the item. The common styles are things like 'paged'
+that will allow for a multi-item listing to be paginated (if supported). Also, 'inline' for single line items
+so that the item does not have any newlines added at the start or the finish.
 

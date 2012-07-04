@@ -41,8 +41,9 @@ static unsigned int	g_max_call_depth	= 10;
  * Linking Structures
  *--------------------------------------------------------------------------------*/
 GROUP 	g_group_tree = {{0x00},0,0,NULL,NULL,NULL,NULL};
-static FUNCTION		g_function_list = {0,0,{0x00},NULL,NULL};
 static SAMPLE		g_sample_list = {{0,0},{0,0},NULL};
+static FUNCTION		g_function_list = {0,0,{0x00},NULL,NULL};
+static APPLICATION	g_application_list = {{NULL,0},NULL,NULL,NULL,NULL,{NULL,0,NULL},0,NULL};
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : test_walk_node_tree
@@ -404,6 +405,47 @@ FUNCTION*	find_function(unsigned char* name, unsigned int name_length)
 
 		result = result->next;
 	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : find_add_application
+ * Desc : This function will find or add an application from the list of
+ *        applications.
+ *--------------------------------------------------------------------------------*/
+APPLICATION*	find_add_application(unsigned char* name, unsigned int name_length)
+{
+	APPLICATION* 	result = NULL;
+	APPLICATION*	current_appl;
+
+	/* add it to the end of the list */
+	current_appl = &g_application_list;
+
+	while (current_appl != NULL)
+	{
+		if (current_appl->next == NULL)
+		{
+			/* we have reached the end of the list -- add new application */
+			result = calloc(1,sizeof(APPLICATION));
+
+			result->name.name_length = name_length;
+			result->name.name = malloc(name_length);
+			memcpy(result->name.name,name,name_length);
+
+			current_appl->next = result;
+			break;
+		}
+		else if (current_appl->name.name_length == name_length && memcmp(current_appl->name.name,name,name_length) == 0)
+		{
+			/* found the item */
+			result = current_appl;
+			break;
+		}
+
+		current_appl = current_appl->next;
+	}
+
 
 	return result;
 }
@@ -811,6 +853,96 @@ unsigned int	add_block_file(BLOCK_NODE* block, GROUP** local_group_list)
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_block_application
+ * Desc : This will add the block for the application.
+ *--------------------------------------------------------------------------------*/
+unsigned int	add_block_application(BLOCK_NODE* block, GROUP** local_group_list, APPLICATION** local_application_list)
+{
+	unsigned int 	result = EC_OK;
+	OPTION*			current_option = NULL;
+	APPLICATION*	application	= NULL;
+	
+	if (block->application_id != 0)
+	{
+		application = local_application_list[block->application_id];
+	}
+
+	if (block->group != NULL)
+	{
+		local_group_list[0] = block->group;
+	}
+
+	if (block->option.name_length > 0)
+	{
+		if (application != NULL)
+		{
+			/* create the new option */
+			current_option = calloc(1,sizeof(OPTION));
+			current_option->name.name = block->option.name;
+			current_option->name.name_length = block->option.name_length;
+			current_option->flags = block->application_flag;
+
+			if (application->option_list == NULL)
+			{
+				/* first element of the list */
+				application->option_list = current_option;
+				application->option_list->last = current_option;
+			}
+			else
+			{
+				/* add to the end */
+				current_option->option_id = application->option_list->last->option_id + 1;
+				application->option_list->last->next = current_option;
+				application->option_list->last = current_option;
+			}
+		}
+		else
+		{
+			result = EC_OPTION_MUST_HAVE_APPLICATION_SCOPE;
+			raise_warning(block->line_number,result,NULL,NULL);
+		}
+	}
+
+	if (block->value.name_length > 0)
+	{
+		if (current_option == NULL)
+		{
+			result = EC_VALUE_MUST_BE_ASSOCIATED_WITH_OPTION;
+			raise_warning(block->line_number,result,g_source_filename,NULL);
+		}
+		else if (current_option->value.name_length > 0)
+		{
+			result = EC_OPTION_VALUE_REDEFINED;
+			raise_warning(block->line_number,result,NULL,NULL);
+		}
+		else
+		{
+			current_option->value.name = block->value.name;
+			current_option->value.name_length = block->value.name_length;
+		}
+	}
+
+	/* description is multi-purpose so wont be attached to and application without
+	 * an application atom.
+	 */
+	if (block->description.name_length > 0 && current_option != NULL)
+	{
+		if (current_option->description.name_length > 0)
+		{
+			result = EC_DOUBLE_DESCRIPTOR_FOUND;
+			raise_warning(block->line_number,result,g_source_filename,NULL);
+		}
+		else
+		{
+			current_option->description.name = block->description.name;
+			current_option->description.name_length = block->description.name_length;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_block_api
  * Desc : This will add the block for the api. This can add fields to the parts
  *        of the API.
@@ -1016,7 +1148,7 @@ unsigned int	add_block_state(BLOCK_NODE* block, GROUP** local_group_list)
  * Name : add_block
  * Desc : This function will add a block to the diagram tree.
  *--------------------------------------------------------------------------------*/
-unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** local_function_list )
+unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** local_function_list, APPLICATION** local_application_list )
 {
 	STATE*				to_state = NULL;
 	GROUP*				owing_group = NULL;
@@ -1047,6 +1179,10 @@ unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** l
 	else if (block->api_type != NULL)
 	{
 		result = add_block_type(block,local_group_list);
+	}
+	else if (block->application_id != 0)
+	{
+		result = add_block_application(block,local_group_list,local_application_list);
 	}
 	else if (block->api_function != NULL || (block->flags & FLAG_IN_FUNCTION) == FLAG_IN_FUNCTION)
 	{
@@ -1171,6 +1307,7 @@ void	add_to_pair_list(NAME_PAIRS_LIST* list, NAME* name, NAME* string)
  *--------------------------------------------------------------------------------*/
 unsigned int	add_pair_to_block (	GROUP**			local_group_list,
  									FUNCTION**		local_function_list,
+									APPLICATION**	local_application_list,
 									API_FUNCTION**	local_api_function_list,
 									BLOCK_NODE*		node,
 									unsigned char*	record,
@@ -1211,6 +1348,35 @@ unsigned int	add_pair_to_block (	GROUP**			local_group_list,
 			if (node->api_type != NULL)
 			{
 				add_api_type_record(node->api_type,ATOM_TYPE_FIELD,&string,&name,NULL);
+			}
+			break;
+
+		case ATOM_SYNOPSIS:
+			if (node->application_id > 0)
+			{
+				APPLICATION*	application = local_application_list[node->application_id];
+
+				if (application != NULL)
+				{
+					if (application->synopsis_list.name.name_length == 0)
+					{
+						/* ad to start */
+						copy_name(&name,&application->synopsis_list.name);
+						copy_name(&string,&application->synopsis_list.items);
+						application->synopsis_list.last = &application->synopsis_list;
+					}
+					else
+					{
+						/* add to end */
+						SYNOPSIS_LIST*	new_synopsis = calloc(1,sizeof(SYNOPSIS_LIST));
+
+						copy_name(&name,&new_synopsis->name);
+						copy_name(&string,&new_synopsis->items);
+
+						application->synopsis_list.last->next = new_synopsis;
+						application->synopsis_list.last = new_synopsis;
+					}
+				}
 			}
 			break;
 
@@ -1297,6 +1463,73 @@ unsigned int	add_atom_to_constant(	GROUP** 		local_group_list,
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * @name: new_section
+ * @desc: This function will add a section to application.
+ *--------------------------------------------------------------------------------*/
+unsigned int	new_section(APPLICATION* application, unsigned char* name, unsigned int name_length)
+{
+	unsigned int	result = 0;
+	SECTION*		new_section = calloc(1,sizeof(SECTION));
+			
+	if (new_section != NULL && application != NULL)
+	{
+		/* allocate the section_list */
+		new_section->name.name			= malloc(name_length);
+		new_section->name.name_length	= name_length;
+		memcpy(new_section->name.name,name,name_length);
+
+		if (application->section_list == NULL)
+		{
+			/* Ok, the first part of the section_list will have the section_list name */
+			application->section_list		= new_section;
+			application->section_list->last	= new_section;
+		}
+		else
+		{
+			application->section_list->last->next	= new_section;
+			application->section_list->last			= new_section;
+		}
+
+		result = 1;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: extend_section
+ * @desc: This function will extend the section data.
+ *--------------------------------------------------------------------------------*/
+unsigned int	extend_section(APPLICATION* application, unsigned char* name, unsigned int name_length)
+{
+	unsigned int	result = 0;
+	unsigned char*	temp;
+
+	if (application != NULL && name_length > 0)
+	{
+		temp = realloc(	application->section_list->last->section_data.name,
+						application->section_list->last->section_data.name_length + name_length + 1);
+
+		if (temp != NULL)
+		{
+			if (application->section_list->last->section_data.name_length > 0)
+			{
+				application->section_list->last->section_data.name[application->section_list->last->section_data.name_length++] = 0x20;
+			}
+
+			memcpy(&temp[application->section_list->last->section_data.name_length],name,name_length);
+			
+			application->section_list->last->section_data.name = temp;
+			application->section_list->last->section_data.name_length += name_length;
+		}
+
+		result = 1;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_atom_to_type
  * Desc : This function will add the atom to the block. 
   *--------------------------------------------------------------------------------*/
@@ -1375,6 +1608,7 @@ unsigned int	add_atom_to_type(	GROUP** 		local_group_list,
  *--------------------------------------------------------------------------------*/
 unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 									FUNCTION**		local_function_list,
+									APPLICATION**	local_application_list,
 									API_FUNCTION**	local_api_function_list,
 									BLOCK_NODE*		node,
 									unsigned char*	record,
@@ -1385,6 +1619,7 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 	unsigned int	result = EC_OK;
 	unsigned int	line_number = 0;
 	unsigned int	group_id = ((record[RECORD_GROUP]<< 8) | record[RECORD_GROUP+1]);
+	unsigned int	application_id = group_id;
 	TRIGGER*		trigger;
 	FUNCTION*		function;
 
@@ -1434,9 +1669,13 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 		case ATOM_DESC:
 		case ATOM_DESCRIPTION:
 			node->description.name = realloc(node->description.name,node->description.name_length+payload_length+1);
-			node->description.name[node->description.name_length] = 0x20;
-			memcpy(&node->description.name[node->description.name_length+1],payload,payload_length);
-			node->description.name_length += payload_length + 1;
+
+			if (node->description.name_length > 0)
+			{
+				node->description.name[node->description.name_length++] = 0x20;
+			}
+			memcpy(&node->description.name[node->description.name_length],payload,payload_length);
+			node->description.name_length += payload_length;
 
 			break;
 
@@ -1471,7 +1710,7 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 			}
 			break;
 
-			case ATOM_NEXT:
+		case ATOM_NEXT:
 			if (node->timeline != NULL)
 			{
 				line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
@@ -1700,17 +1939,76 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 
 			/* handle atoms that take a name */
 		case ATOM_ACTIVATION:
+			printf("ignoring activation\n");
 			break;
 
 			/* string atoms */
 		case ATOM_REPEATS:
+			printf("ignoring repeat\n");
 			break;
 
 		case ATOM_COPYRIGHT:
 			printf("ignoring copyright\n");
 			break;
 
+		case ATOM_SECTION:
+			if (application_id != 0)
+			{
+				node->application_id = application_id; 
+				new_section(local_application_list[application_id],payload,payload_length);
+			}
+			else if (node->application_id != 0)
+			{
+				/* need to extend the section data */
+				extend_section(local_application_list[node->application_id],payload,payload_length);
+			}
+			else
+			{
+				result = EC_ATOM_REQUIRES_APPLICATION_ATOM;
+				raise_warning(line_number,result,NULL,NULL);
+			}
+			break;
+
+		case ATOM_OPTION:
+			if (node->option.name != NULL)
+			{
+				result = EC_MULTIPLE_DEFINITION_OPTION;
+				raise_warning(line_number,result,NULL,NULL);
+			}
+			else
+			{
+				node->option.name = malloc(payload_length);
+				memcpy(node->option.name,payload,payload_length);
+				node->option.name_length = payload_length;
+			}
+
+			if (application_id != 0)
+			{
+				node->application_id = application_id;
+			}
+			break;
+
+		case ATOM_VALUE:
+			if (node->value.name != NULL)
+			{
+				result = EC_MULTIPLE_DEFINITION_VALUE;
+				raise_warning(line_number,result,NULL,NULL);
+			}
+			else
+			{
+				node->value.name = malloc(payload_length);
+				memcpy(node->value.name,payload,payload_length);
+				node->value.name_length = payload_length;
+			}
+
+			if (application_id != 0)
+			{
+				node->application_id = application_id;
+			}
+			break;
+
 		default:
+			printf("atom: %d\n",record[RECORD_ATOM]);
 			line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
 			raise_warning(line_number,EC_UNKNOWN_ATOM,NULL,NULL);
 			result = EC_UNKNOWN_ATOM;
@@ -1848,6 +2146,7 @@ unsigned int	process_input(const char* filename)
 	unsigned int	line_number = 0;
 	unsigned int	num_groups = 1;
 	unsigned int	num_functions = 1;
+	unsigned int	num_applications = 0;
 	unsigned int	num_api_functions = 0;
 	unsigned int	record_size;
 	unsigned int	file_name_size;
@@ -1864,6 +2163,7 @@ unsigned int	process_input(const char* filename)
 
 	static GROUP*			local_group[MAX_GROUPS_PER_FILE];
 	static FUNCTION*		local_functions[MAX_GROUPS_PER_FILE];
+	static APPLICATION*		local_applications[MAX_GROUPS_PER_FILE];
 	static API_FUNCTION*	local_api_functions[MAX_GROUPS_PER_FILE];
 	static unsigned char	source_file_name[FILENAME_MAX+1];
 
@@ -1928,7 +2228,7 @@ unsigned int	process_input(const char* filename)
 						if (block_node.line_number != 0)
 						{
 							/* add the block to the output */
-							add_block(&block_node,local_group,local_functions);
+							add_block(&block_node,local_group,local_functions,local_applications);
 						}
 
 						memset(&block_node,0,sizeof(block_node));
@@ -1978,6 +2278,11 @@ unsigned int	process_input(const char* filename)
 									local_functions[num_functions] = add_function(record_buffer,record_size,0);
 								}
 								num_functions++;
+								break;
+
+							case INTERMEDIATE_RECORD_APPLICATION:
+								local_applications[num_applications] = find_add_application(record_buffer,record_size);
+								num_applications++;
 								break;
 
 							case INTERMEDIATE_RECORD_SAMPLE:
@@ -2069,6 +2374,7 @@ unsigned int	process_input(const char* filename)
 								{
 									add_atom_to_block(	local_group,
 														local_functions,
+														local_applications,
 														local_api_functions,
 														&block_node,
 														record,
@@ -2090,6 +2396,7 @@ unsigned int	process_input(const char* filename)
 							case INTERMEDIATE_RECORD_PAIR:
 								add_pair_to_block(	local_group,
 													local_functions,
+													local_applications,
 													local_api_functions,
 													&block_node,
 													record,
@@ -2128,14 +2435,28 @@ unsigned int	process_input(const char* filename)
 								break;
 
 							case INTERMEDIATE_RECORD_END:
-								/*TODO: fix this: block_node.api_type = NULL; */
 								if (block_node.api_type != NULL)
 								{
 									in_api_group = 0;
 								}
 								break;
 
+							case INTERMEDIATE_RECORD_BOOLEAN:
+								{
+									unsigned int	flags = 0;
+
+									switch(record[RECORD_ATOM])
+									{
+										case ATOM_REQUIRED: flags = OPTION_FLAG_REQUIRED; break;
+										case ATOM_MULTIPLE: flags = OPTION_FLAG_MULTIPLE; break;
+									}
+
+									block_node.application_flag |= flags;
+								}
+								break;
+
 							default:
+								printf("%d\n",record[RECORD_TYPE]);
 								raise_warning(0,EC_PROBLEM_WITH_INPUT_FILE,(unsigned char*)filename,NULL);
 								result = 1;
 						}
@@ -2144,7 +2465,7 @@ unsigned int	process_input(const char* filename)
 
 				if (block_node.line_number != 0)
 				{
-					add_block(&block_node,local_group,local_functions);
+					add_block(&block_node,local_group,local_functions,local_applications);
 				}
 			}
 			else
@@ -3288,6 +3609,64 @@ void	write_group_id_record(	unsigned char	type,
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : write_option_record
+ * Desc : This function writes a group option record.
+ *--------------------------------------------------------------------------------*/
+void	write_option_record( unsigned char type, OUTPUT_FILE* file, OPTION* option)
+{
+	unsigned char	buffer[9];
+
+	buffer[0] = type;
+	buffer[1] = (option->flags & 0xff00) >> 8;
+	buffer[2] = option->flags & 0x00ff;
+	buffer[3] = (option->name.name_length & 0xff00) >> 8;
+	buffer[4] = option->name.name_length & 0xff;
+	buffer[5] = (option->value.name_length & 0xff00) >> 8;
+	buffer[6] = option->value.name_length & 0xff;
+	buffer[7] = (option->description.name_length & 0xff00) >> 8;
+	buffer[8] = option->description.name_length & 0xff;
+
+	file->parts = 4;
+	file->record_size = sizeof(buffer) + option->name.name_length + option->value.name_length + option->description.name_length;
+	file->buffer_list[0].size = sizeof(buffer);
+	file->buffer_list[0].buffer	= buffer;
+	file->buffer_list[1].size	= option->name.name_length;
+	file->buffer_list[1].buffer = option->name.name;
+	file->buffer_list[2].size	= option->value.name_length;
+	file->buffer_list[2].buffer = option->value.name;
+	file->buffer_list[3].size	= option->description.name_length;
+	file->buffer_list[3].buffer = option->description.name;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: write_synopsis_record
+ * @desc: This function will write te synopsis record to the output file.
+ *--------------------------------------------------------------------------------*/
+void	write_synopsis_record(unsigned char type, OUTPUT_FILE* file, NAME* name, unsigned char* synopsis_index, unsigned int index_size)
+{
+	unsigned char	buffer[5];
+
+	buffer[0] = type;
+	buffer[1] = (name->name_length & 0xff00) >> 8;
+	buffer[2] = name->name_length & 0xff;
+	buffer[3] = (index_size & 0xff00) >> 8;
+	buffer[4] = index_size & 0xff;
+
+	file->parts = 3;
+	file->record_size = sizeof(buffer) + name->name_length + index_size;
+	file->buffer_list[0].size = sizeof(buffer);
+	file->buffer_list[0].buffer	= buffer;
+	file->buffer_list[1].size	= name->name_length;
+	file->buffer_list[1].buffer = name->name;
+	file->buffer_list[2].size	= index_size;
+	file->buffer_list[2].buffer = synopsis_index;
+
+	write_to_file(file);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : write_group_record
  * Desc : This function writes a group record.
  *--------------------------------------------------------------------------------*/
@@ -3717,7 +4096,6 @@ void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_di
 	write_empty_record(LINKER_SEQUENCE_END,outfile);
 }
 
-
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : output_samples
  * Desc : This function will output all the samples collected to the output
@@ -3731,6 +4109,171 @@ void	output_samples(OUTPUT_FILE* outfile, SAMPLE* list)
 	{
 		write_pair_record(LINKER_SAMPLE,outfile,&current_sample->name,&current_sample->sample);
 		current_sample = current_sample->next;
+	}
+}
+
+#if (MAX_NUM_OPTIONS > 255)
+#error Need to fix the following code to allow for greater the 255 - also will need to fix the processor
+#endif
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: output_synopsis
+ * @desc: This function will output the synopsis. As part of this it will try
+ *        and validate the options specified in the synopsis list. it will list
+ *        the synopsis in the numeric order that they appear in the applications
+ *        list.
+ *--------------------------------------------------------------------------------*/
+void	output_synopsis(OUTPUT_FILE* outfile, SYNOPSIS_LIST* synopsys, OPTION* option_list)
+{
+	unsigned int	end;
+	unsigned int	start;
+	unsigned int	item;
+	unsigned int	index = 0;
+	unsigned int	position = 0;
+	unsigned int	name_length;
+	unsigned char	synopsis_index[MAX_NUM_OPTIONS];
+	OPTION*			option;
+
+	while(position < synopsys->items.name_length && index < MAX_NUM_OPTIONS)
+	{
+		start = position;
+
+		/* remove white space */
+		while ((start < synopsys->items.name_length) && (synopsys->items.name[start] < 0x0f || synopsys->items.name[start] == 0x20))
+		{
+			start++;
+		}
+
+		/* find the string */
+		while (synopsys->items.name[position] != ',' && (position < synopsys->items.name_length))
+		{
+			position++;
+		}
+
+		/* trim non-valid chars */
+		end = position;
+		while ((end-1 > start) && (synopsys->items.name[end-1] < 0x0f || synopsys->items.name[end-1] == 0x20))
+		{
+			end--;
+		}
+
+		/* now find the option in the option list */
+		option = option_list;
+
+		name_length = end - start;
+
+		while (option != NULL)
+		{
+			if (name_length == option->name.name_length && memcmp(&synopsys->items.name[start],option->name.name,name_length) == 0)
+			{
+				/* Ok, found it */
+				synopsis_index[index++] = option->option_id;
+				break;
+			}
+
+			option = option->next;
+		}
+
+		if (option == NULL)
+		{
+			unsigned char	hold = synopsys->items.name[end];
+
+			synopsys->items.name[end] = '\0';
+			raise_warning(0,EC_OPTION_REQUIRED_BY_SYNOPSIS_MISSING,&synopsys->items.name[start],NULL);
+			synopsys->items.name[end] = hold;
+		}
+
+		position++;
+	}
+
+	/* output the synopsis to the file */
+	write_synopsis_record(LINKER_APPLICATION_SYNOPSIS,outfile,&synopsys->name,synopsis_index,index);
+
+	if (index == MAX_NUM_OPTIONS)
+	{
+		raise_warning(0,EC_MAX_NUMBER_OF_OPTIONS_IN_SYNOPSIS,NULL,NULL);
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : output_applications
+ * Desc : This function will output all the applications collected to the output
+ *        file.
+ *--------------------------------------------------------------------------------*/
+void	output_applications(OUTPUT_FILE* outfile, APPLICATION* list)
+{
+	OPTION*			option;
+	SECTION*		section;
+	COMMAND*		command;
+	SECTION*		sub_section;
+	APPLICATION*	application = list;
+	SYNOPSIS_LIST*	synopsis;
+
+	while (application != NULL)
+	{
+		if (application->name.name_length > 0)
+		{
+			printf("application output: %s\n",application->name.name);
+			write_string_record(LINKER_APPLICATION_START,outfile,application->name.name,application->name.name_length);
+	
+			/* now output the options */
+			option = application->option_list;
+
+			while (option != NULL)
+			{
+				write_option_record(LINKER_APPLICATION_OPTION,outfile,option);
+
+				option = option->next;
+			}
+
+			/* now write the synposis */
+			synopsis = &application->synopsis_list;
+
+			while (synopsis != NULL)
+			{
+				if (synopsis->name.name_length > 0)
+				{
+					/* we have a synopsis and now need to process the list */
+					output_synopsis(outfile,synopsis,application->option_list);
+				}
+
+				synopsis = synopsis->next;
+			}
+
+			/* now output the commands */
+			command = application->command_list;
+
+			while (command != NULL)
+			{
+				write_type_record(LINKER_APPLICATION_COMMAND,outfile,&command->name,&command->parameters,&command->description);
+
+				command = command->next;
+			}
+
+			/* now write the sections */
+			section = application->section_list;
+			
+			while (section != NULL)
+			{
+				/* now write the sections to the file */
+				write_pair_record(LINKER_APPLICATION_SECTION,outfile,&section->name,&section->section_data);
+				
+				sub_section = section->sub_section_list;
+
+				while (sub_section != NULL)
+				{
+					write_pair_record(LINKER_APPLICATION_SUB_SECTION,outfile,&sub_section->name,&sub_section->section_data);
+				
+					sub_section = sub_section->next;
+				}
+
+				section = section->next;
+			}
+
+			write_empty_record(LINKER_APPLICATION_END,outfile);
+		
+		}
+		application = application->next;
 	}
 }
 
@@ -3775,6 +4318,9 @@ unsigned int	produce_output(char* output_name)
 
 		/* first dump all the samples */
 		output_samples(&outfile,g_sample_list.next);
+
+		/* second dump the applications to the file */
+		output_applications(&outfile,g_application_list.next);
 
 		/* ok, we have an open file */
 		while (current != NULL)

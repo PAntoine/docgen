@@ -518,3 +518,21 @@ void	copy_name(NAME* from, NAME* to)
 	}
 }
 
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: compare_name
+ * @desc: This function will compare two NAMEs.
+ *--------------------------------------------------------------------------------*/
+int	compare_name(NAME* one, NAME* two)
+{
+	int result;
+
+	if ((result = one->name_length - two->name_length) == 0)
+	{
+		result = memcmp(one->name,two->name,one->name_length);
+	}
+
+	return result;
+}
+
+

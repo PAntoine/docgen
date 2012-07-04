@@ -10,7 +10,7 @@
  * @author: 
  * Date  : 12/03/2012 10:41:45
  *--------------------------------------------------------------------------------*
- *                     @copyright: (c) 2012 Peter Antoine
+ *                     copyright (c) 2012 Peter Antoine
  *                            All rights Reserved.
  *                    Released Under the Artistic Licence
  *--------------------------------------------------------------------------------*/

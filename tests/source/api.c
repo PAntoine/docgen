@@ -371,7 +371,7 @@ unsigned int	DGTF_IF_AddBoolean(unsigned char* buffer, unsigned int buffer_offse
 
 /**---- FUNCTION -----------------------------------------------------------------*
  * @api			 DGTF_IF_AddInt
- * @desc		 	This function adds an integer to the buffer.
+ * @desc	 	 This function adds an integer to the buffer.
  * @action 
  * 		   :      DDTF_AddInt adds an integer to the output packet. 
  *         :

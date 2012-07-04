@@ -31,6 +31,7 @@ TIMELINE* 		add_timeline ( GROUP* group, unsigned char* name, unsigned int name_
 STATE* 			add_state ( GROUP* group, unsigned char* name, unsigned int name_length, unsigned int line_number, unsigned int flags );
 STATE* 			find_state ( GROUP* group, unsigned char* name, unsigned int name_length );
 void			copy_name(NAME* from, NAME* to);
+int				compare_name(NAME* one, NAME* two);
 
 void dump(char* string,NAME* name);
 

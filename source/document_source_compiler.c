@@ -37,6 +37,7 @@ static LOOKUP_LIST	g_macro_lookup;
 static LOOKUP_LIST	g_functions;
 static LOOKUP_LIST	g_apis;
 static LOOKUP_LIST	g_samples;
+static LOOKUP_LIST	g_applications;
 
 extern unsigned char is_valid_char[];
 
@@ -90,7 +91,7 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 	unsigned int	count;
 	unsigned int	data_size;
 	unsigned char	length[2];
-	unsigned char	record[RECORD_DATA_START];
+	unsigned char	record[RECORD_DATA_START+1];
 	ATOM_BLOCK*		current = &index->index;
 	
 	while (current != NULL)
@@ -181,6 +182,13 @@ void output_atoms (int output_file, ATOM_INDEX* index)
 					write_string(output_file,&current->index[count].type.type_type);
 					write_string(output_file,&current->index[count].type.name);
 					write_string(output_file,&current->index[count].type.description);
+					break;
+
+				case INTERMEDIATE_RECORD_BOOLEAN:
+					record[RECORD_DATA_SIZE  ] = 0;
+					record[RECORD_DATA_SIZE+1] = 1;
+					record[RECORD_DATA_START]  = current->index[count].boolean.true_false;
+					write(output_file,record,RECORD_DATA_START+1);
 					break;
 
 				default:
@@ -410,6 +418,9 @@ unsigned int	generate_output(ATOM_INDEX* atom_index, char* filename, char* input
 
 		/* dump the apis next */
 		output_lookup(outfile,&g_samples,INTERMEDIATE_RECORD_SAMPLE);
+		
+		/* dump the apis next */
+		output_lookup(outfile,&g_applications,INTERMEDIATE_RECORD_APPLICATION);
 
 		/* dump the atoms */
 		output_atoms (outfile,atom_index);
@@ -636,7 +647,7 @@ unsigned int find_add_lookup ( LOOKUP_LIST* lookup_list, unsigned char* name, un
 		previous = current;
 		current = current->next;
 	}
-
+	
 	if (result == INVALID_ITEM)
 	{
 		if (previous->num_items < LOOKUP_INDEX_SIZE)
@@ -941,6 +952,17 @@ static unsigned int add_name_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned 
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : add_boolean_atom
+ * Desc : This function will add the string literal item to the atom index.
+ *--------------------------------------------------------------------------------*/
+void add_boolean_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned int true_false)
+{
+	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_BOOLEAN,atom);
+	
+	item->boolean.true_false	= true_false;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : add_string_atom
  * Desc : This function will add the string literal item to the atom index.
  *--------------------------------------------------------------------------------*/
@@ -1208,6 +1230,40 @@ unsigned int decode_name_string (unsigned char* buffer, unsigned int buffer_leng
 	return buffer_length;
 }
 
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : decode_boolean
+ * Desc : This function will decode a binary atom. The atom string should be either
+ *        yes or no.
+ *--------------------------------------------------------------------------------*/
+unsigned int decode_boolean (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
+{
+	unsigned int 	count = 0;
+	unsigned int	true_false = 0;
+
+	if (buffer_length > 0)
+	{
+		/* trim any unsightly characters */
+		for (count=buffer_length-1;count>0 && buffer[count] < 0x0f ;count--)
+		{
+		}
+
+		buffer_length = count+1;
+	}
+
+	/* if it matches yes then set it, else it is false which is the default */
+	if (buffer_length == 3 && memcmp("yes",buffer,3) == 0)
+	{
+		true_false = 1;
+	}
+	else if (buffer_length != 2 || memcmp("no",buffer,2) != 0)
+	{
+		raise_warning(atom_list->line_number,EC_EXPECTED_YES_NO,NULL,NULL);
+	}
+
+	add_boolean_atom(atom_list,atom,true_false);
+
+	return buffer_length;
+}
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : decode_string
@@ -1299,6 +1355,29 @@ unsigned short decode_group (unsigned char* buffer, unsigned int buffer_length, 
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : decode_application
+ * Desc : This function will decode a application atom and add it to the atom index.
+ *        Actually there is not much to do, as the application will be all data on the
+ *        line to the end, so just add it to the atom list.
+ *--------------------------------------------------------------------------------*/
+unsigned short decode_application (unsigned char* buffer, unsigned int buffer_length)
+{
+	unsigned int count;
+	unsigned short result;
+
+	/* trim any unsightly characters */
+	for (count=buffer_length-1;count>0 && buffer[count] < 0x0f ;count--)
+	{
+	}
+
+	buffer_length = count+1;
+					
+	result = find_add_lookup(&g_applications,buffer,buffer_length);
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : collect_sample
  * Desc : This function will collect the sample and add it to the sample payload.
  *        Note: there is NO formatting done on the data repeated as it is in the
@@ -1332,6 +1411,7 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 	unsigned int			found = 0;
 	unsigned int			result = EC_OK;
 	unsigned int			fixed;
+	unsigned int			not_used;
 	unsigned int			real_eol = line_length;
 	unsigned int			comment_type;
 	unsigned int			sample_start = 0;
@@ -1351,8 +1431,9 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 	static unsigned short	g_default_group = DEFAULT_GROUP;
 	static unsigned int		g_current_sample = INVALID_ITEM;
 	static unsigned int		g_current_function = INVALID_ITEM;
-	static unsigned int		g_waiting_to_collect = 0;
+	static unsigned int		g_current_application = INVALID_ITEM;
 	static unsigned char	g_looking_for_type = 0;
+	static unsigned int		g_waiting_to_collect = 0;
 	static unsigned char	g_collecting_sample = 0;
 	static unsigned char	g_looking_for_comment = 1;
 	static unsigned char	g_looking_for_globals = 0;
@@ -1548,24 +1629,27 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 				g_multiline = 0;
 				pos += atoms_get_length(atom) + 1;
 
-				if (line[pos] != ':' && line[pos] != 0x09 && line[pos] != 0x20)
+				if (pos < line_length && line[pos] != ':' && line[pos] != 0x09 && line[pos] != 0x20 && line[pos] != 0x0a && line[pos] != 0x0d)
 				{
 					result = EC_WEIRD_STUFF_AFTER_COMMAND;
 					raise_warning(atom_list->line_number,EC_WEIRD_STUFF_AFTER_COMMAND,NULL,NULL);
 					break;
 				}
 
-				pos++;
-
-				pos = remove_white_space(pos,line);
-
-				/* detach end of line comments. */
+				if (pos < line_length)
 				{
-					unsigned int temp = line_length-input_formats[input_type].end_of_line_comment_size;
-					if (input_formats[input_type].end_comment(line,line_length,&temp))
+					pos++;
+
+					pos = remove_white_space(pos,line);
+
+					/* detach end of line comments. */
 					{
-						line_length -= input_formats[input_type].end_of_line_comment_size;
-						comment_end = 1;
+						unsigned int temp = line_length-input_formats[input_type].end_of_line_comment_size;
+						if (input_formats[input_type].end_comment(line,line_length,&temp))
+						{
+							line_length -= input_formats[input_type].end_of_line_comment_size;
+							comment_end = 1;
+						}
 					}
 				}
 	
@@ -1716,6 +1800,12 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						}
 						break;
 
+					/* add an application lookup */
+					case ATOM_APPLICATION:
+						g_current_application = decode_application(&line[pos],line_length-pos);
+						printf("g_current_application: %d\n",g_current_application);
+						break;
+
 					/* function or API atom, starts a function lookup and a creates a function/api */
 					case ATOM_API:
 					case ATOM_FUNCTION:
@@ -1758,6 +1848,10 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						}
 						break;
 					
+					case ATOM_SYNOPSIS:
+							/* TODO: pos += */ decode_pair(&line[pos],line_length-pos,atom_list,atom,g_current_application);
+						break;
+
 					case ATOM_RETURNS:
 					case ATOM_PARAMETER:
 						if (g_in_function)
@@ -1796,15 +1890,33 @@ static unsigned int parse_line ( unsigned char* line, unsigned int line_length, 
 						}
 						break;
 
+					/* string atom, that have a multiline follower */
+					case ATOM_SECTION:
+					case ATOM_SUBSECTION:
+						g_multiline = atom;
+						comment_end = 0;
+
+						pos += decode_string(&line[pos],line_length-pos,atom_list,atom,g_current_application);
+						break;
+					
+					/* string atoms for applications */	
+					case ATOM_VALUE:
+					case ATOM_OPTION:
+					case ATOM_COMMAND:
+						pos += decode_string(&line[pos],line_length-pos,atom_list,atom,g_current_application);
+						break;
+
 					/* string atoms */
 					case ATOM_BRIEF:
 					case ATOM_AUTHOR:
-					case ATOM_OPTION:
-					case ATOM_LICENCE:
 					case ATOM_REPEATS:
-					case ATOM_COPYRIGHT:
 					case ATOM_CONDITION:
 						pos += decode_string(&line[pos],line_length-pos,atom_list,atom,(RECORD_FUNCTION_FLAG| g_current_function));
+						break;
+
+					case ATOM_MULTIPLE:
+					case ATOM_REQUIRED:
+						pos += decode_boolean(&line[pos],line_length-pos,atom_list,atom,(RECORD_FUNCTION_FLAG| g_current_application));
 						break;
 
 					default:	
@@ -1906,6 +2018,7 @@ int main(int argc, char* argv[])
 	memset(&g_functions,0, sizeof(g_functions));
 	memset(&g_apis,0, sizeof(g_apis));
 	memset(&g_samples,0, sizeof(g_samples));
+	memset(&g_applications,0, sizeof(g_applications));
 
 	raw_atoms.line_number = 0;
 
@@ -2074,6 +2187,9 @@ int main(int argc, char* argv[])
 
 				/* add a holder for the default group */
 				find_add_lookup(&g_group_lookup,(unsigned char*)"",0);
+				
+				/* application 0 - means not defined so add a default */
+				find_add_lookup(&g_applications,(unsigned char*)"",0);
 
 				while((linesize = getline((char**)&line_buffer,&buffer_size,input_file)) != -1)
 				{

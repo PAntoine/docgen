@@ -30,7 +30,7 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"Invalid item name",
 	"Invalid name or name not found",
 	"Unknown command",
-	"Unexpected charters after the command.",
+	"Unexpected characters after the command.",
 	"Failed to open output file.",
 	"INTERNAL ERROR: unknown record type.",
 	"Input file built with later major version.",
@@ -90,9 +90,10 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"undefined type referenced",
 	"multiple @constants requests without @end_constants",
 	"@end_constants without a @constants",
-	"undefined constant group referenced"
+	"undefined constant group referenced",
+	"multiple constants without a constant",
 	"multiple @sample without @end_sample",
-	"@end_sample without a @sample"
+	"@end_sample without a @sample",
 	"failed to find function",
 	"failed to find constant",
 	"failed to find type",
@@ -102,9 +103,19 @@ static char* error_string[EC_MAX_ERROR_CODE] =
 	"INTERNAL_ERROR: bad state",
 	"unexpected atom found",
 	"INTERNAL ERROR: data too large",
-	"unexpected item in state"
-
-
+	"unexpected item in state",
+	"expected \"yes\" or \"no\" for boolean item",
+	"more than one application defined in a block",
+	"atom requires an @application to be defined",
+	"multiple definitions of @option found in the same block",
+	"multiple definitions of @value found in the same block",
+	"@option must be defined within @application scope",
+	"@value defined for @option already",
+	"@value must be associated with @option",
+	"Maximum number of options found in synopsis list.",
+	"option referenced in synopsis list is missing.",
+	"\"model:\" badly formatted.",
+	"Unknown output flag"
 };
 	
 /*----- FUNCTION -----------------------------------------------------------------*

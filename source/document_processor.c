@@ -1,19 +1,30 @@
-/*--------------------------------------------------------------------------------*
+/**-----------------------------------------------------------------------------*
  *               Document Generator Project
  *			        by Peter Antoine
  *
- * Name  : document_processor
- * Desc  : This utility is the document processor. 
- *         It will handle the processing of the structural documents with the
- *         data recovered from the source files.
+ * @application	pdp
+ * @section		Description
+ * 				This utility is the document processor.
+ *         		It will handle the processing of the structural documents with the
+ *         		data recovered from the source files.
  *
- * Author: pantoine
- * Date  : 31/01/2012 09:03:17
+ * @synopsis	all		-v, -i ,-o,-?, files
+ * @synopsis	docs	-?
+ * @synopsis	simple	-i, -?
+ *
+ * @section		Error Reporting
+ * 				
+ * 				Please report any problems to https://github.com/PAntoine/docgen
+ *
+ * @section		Author 
+ * 				Peter Antoine
+ * @ignore
  *--------------------------------------------------------------------------------*
  *                     Copyright (c) 2012 Peter Antoine
  *                            All rights Reserved.
  *                    Released Under the Artistic Licence
  *--------------------------------------------------------------------------------*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +36,7 @@
 #include "document_generator.h"
 
 extern OUTPUT_FORMATS	output_formats[];
+extern char* g_input_filename;
 
 /*--------------------------------------------------------------------------------*
  * static constant strings
@@ -34,10 +46,16 @@ static unsigned char	string_api[] = "api";
 static unsigned char	string_state_machine[] = "state_machine";
 static unsigned char	string_sequence_diagram[] = "sequence_diagram";
 static unsigned char	string_sample[] = "sample";
-static unsigned char*	type_string[] = {string_none,string_state_machine,string_sequence_diagram,string_api,string_sample};
-static unsigned int		type_length[] = {0,sizeof(string_state_machine)-1,sizeof(string_sequence_diagram)-1,sizeof(string_api)-1,sizeof(string_sample)-1};
+static unsigned char	string_application[] = "application";
+static unsigned char*	type_string[] = {string_none,string_state_machine,string_sequence_diagram,string_api,string_sample,string_application};
+static unsigned int		type_length[] = {	0,
+											sizeof(string_state_machine)-1,
+											sizeof(string_sequence_diagram)-1,
+											sizeof(string_api)-1,
+											sizeof(string_sample)-1,
+											sizeof(string_application)-1};
 
-extern unsigned char is_valid_char[];
+extern unsigned char	is_valid_char[];
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : tag_all_states
@@ -107,15 +125,15 @@ static unsigned int	generate_state_machine(DRAW_STATE* draw_state, INPUT_STATE* 
 
 	if ((group = find_group(tree,input_state->group_name,input_state->group_length)) == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
 	else if (input_state->item_length > 0 && (current_state = find_state(group,input_state->item_name,input_state->item_length)) == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
 	else if (group->state_machine == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
 	else
 	{
@@ -274,15 +292,15 @@ static unsigned int	generate_sequence_diagram( DRAW_STATE* draw_state, INPUT_STA
 
 	if ((group = find_group(tree,input_state->group_name,input_state->group_length)) == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
 	else if (input_state->item_length > 0 && (current_timeline = find_timeline(group,input_state->item_name,input_state->item_length)) == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
 	else if (group->sequence_diagram == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}	
 	else
 	{
@@ -355,7 +373,7 @@ static unsigned int	generate_sequence_diagram( DRAW_STATE* draw_state, INPUT_STA
  *        The request format is as follows:
  *        {<type>|'*'}{/<name>|'*'}{/<part>}
  *--------------------------------------------------------------------------------*/
-unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_PARTS* api_parts)
+unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_PARTS* api_parts,unsigned int line_number)
 {
 	unsigned int pos = 0;
 	unsigned int name_end = 0;
@@ -402,7 +420,7 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 					break;
 
 				default:
-					raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+					raise_warning(line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 					result = 0;
 			}
 		}
@@ -414,7 +432,7 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 
 			if (name[pos] != '/')
 			{
-				raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+				raise_warning(line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 				result  = 0;
 			}
 			else if (name[pos] == '*')
@@ -446,7 +464,7 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 		{
 			if (name[pos] != '/')
 			{
-				raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+				raise_warning(line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 				result = 0;
 			}
 			else
@@ -488,7 +506,7 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 							break;  	
 
 						default:
-							raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+							raise_warning(line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 							result = 0;
 							break;
 					}
@@ -508,7 +526,7 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 							break;
 
 						default:
-							raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+							raise_warning(line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 							result = 0;
 							break;
 					}
@@ -534,7 +552,7 @@ unsigned int	decode_api_item(unsigned char* name, unsigned int name_length, API_
 							break;
 
 						default:
-							raise_warning(0,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
+							raise_warning(line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,name,NULL);
 							result = 0;
 							break;
 					}
@@ -560,15 +578,15 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 
 	if ((group = find_group(tree,input_state->group_name,input_state->group_length)) == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
-	else if (!decode_api_item(input_state->item_name,input_state->item_length,&item_parts))
+	else if (!decode_api_item(input_state->item_name,input_state->item_length,&item_parts,input_state->line_number))
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
 	else if (group->api == NULL)
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}	
 	else
 	{
@@ -600,7 +618,7 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 
 			if (current_function == NULL)
 			{
-				raise_warning(0,EC_UNDEFINED_FUNCTION,item_parts.name.name,NULL);
+				raise_warning(input_state->line_number,EC_UNDEFINED_FUNCTION,item_parts.name.name,NULL);
 			}
 			else
 			{
@@ -670,7 +688,7 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 				/* check to see if the user specifically asked for the type or not */
 				if ((item_parts.flags & OUTPUT_API_ALL) != OUTPUT_API_ALL)
 				{
-					raise_warning(0,EC_UNDEFINED_TYPE,item_parts.name.name,NULL);
+					raise_warning(input_state->line_number,EC_UNDEFINED_TYPE,item_parts.name.name,NULL);
 				}
 			}
 			else
@@ -726,7 +744,7 @@ static unsigned int	generate_api( DRAW_STATE* draw_state, INPUT_STATE* input_sta
 				/* check to see if the user specifically asked for the constants or not */
 				if ((item_parts.flags & OUTPUT_API_ALL) != OUTPUT_API_ALL)
 				{
-					raise_warning(0,EC_UNDEFINED_CONSTANTS_GROUP,item_parts.name.name,NULL);
+					raise_warning(input_state->line_number,EC_UNDEFINED_CONSTANTS_GROUP,item_parts.name.name,NULL);
 				}
 			}
 			else
@@ -769,7 +787,7 @@ static unsigned int	generate_sample( DRAW_STATE* draw_state, INPUT_STATE* input_
 	/* only, support non-grouped samples are the moment */
 	if (input_state->group_length != sizeof("default")-1 && memcmp(input_state->group_name,"default",sizeof("default")-1))
 	{
-		raise_warning(0,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
 	}
 	else
 	{
@@ -785,6 +803,141 @@ static unsigned int	generate_sample( DRAW_STATE* draw_state, INPUT_STATE* input_
 			}
 
 			current_sample = current_sample->next;
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: decode_application
+ * @desc: This function will decide the application name.
+ *--------------------------------------------------------------------------------*/
+unsigned int	decode_application(INPUT_STATE* input_state, NAME* name, NAME* part, NAME* part_name)
+{
+	unsigned int pos = 0;
+	unsigned int delimiters = 0;
+	unsigned int delimiter[3];
+	unsigned int result = OUTPUT_APPLICATION_ALL_PARTS | OUTPUT_APPLICATION_MULTIPLE;
+	
+	delimiter[0] = input_state->item_length;
+
+	if (input_state->item_length > 0)
+	{
+		while (pos < input_state->item_length && delimiters < 2)
+		{
+			if (input_state->item_name[pos] == '/')
+			{
+				delimiter[delimiters++] = pos;
+				delimiter[delimiters]   = input_state->item_length;
+			}
+
+			pos++;
+		}
+	}
+
+	if (delimiters == 3)
+	{
+		raise_warning(input_state->line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,input_state->item_name,NULL);
+		result = 0;
+	}
+	else
+	{
+		name->name			= input_state->item_name;
+		name->name_length	= delimiter[0];
+
+		if (delimiters > 0)
+		{
+			part->name			= &input_state->item_name[delimiter[0]+1];
+			part->name_length	= delimiter[1]-delimiter[0]-1;
+
+			switch (atoms_check_word(part->name))
+			{
+				case ATOM_NAME:			result = (OUTPUT_APPLICATION_MULTIPLE | OUTPUT_APPLICATION_NAME);		break;
+				case ATOM_SECTION:		result = (OUTPUT_APPLICATION_MULTIPLE | OUTPUT_APPLICATION_SECTION);	break;
+				case ATOM_OPTION:		result = (OUTPUT_APPLICATION_MULTIPLE | OUTPUT_APPLICATION_OPTION);		break;
+				case ATOM_COMMAND:		result = (OUTPUT_APPLICATION_MULTIPLE | OUTPUT_APPLICATION_COMMAND);	break;
+				case ATOM_SYNOPSIS:		result = (OUTPUT_APPLICATION_MULTIPLE | OUTPUT_APPLICATION_SYNOPSIS);	break;
+				default:
+					raise_warning(input_state->line_number,EC_BAD_NAME_FORMAT_IN_REQUEST,part->name,NULL);
+					result = 0;
+			}
+		}
+
+		if (delimiters > 1)
+		{
+			part_name->name			= &input_state->item_name[delimiter[0]+1];
+			part_name->name_length	= delimiter[1]-delimiter[0]-1;
+			result &= ~OUTPUT_APPLICATION_MULTIPLE;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : generate_application
+ * Desc : This function output an application request.
+ *--------------------------------------------------------------------------------*/
+static unsigned int	generate_application( DRAW_STATE* draw_state, INPUT_STATE* input_state, GROUP* tree)
+{
+	NAME			app_name;
+	NAME			part;
+	NAME			part_name;
+	SAMPLE*			current_sample = NULL;
+	APPLICATION*	application;
+	unsigned int	parts;
+
+	/* only, support non-grouped applications */
+	if (input_state->group_length != sizeof("default")-1 && memcmp(input_state->group_name,"default",sizeof("default")-1))
+	{
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+	}
+	else if (!(parts = decode_application(input_state,&app_name,&part,&part_name)))
+	{
+		raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,input_state->input_name,NULL);
+	}
+	else
+	{
+		application = tree->application;
+
+		while (application != NULL)
+		{
+			if (compare_name(&app_name,&application->name) == 0)
+			{
+				break;
+			}
+			application = application->next;
+		}
+
+		if (application == NULL)
+		{
+			raise_warning(input_state->line_number,EC_UNKNOWN_ITEM,app_name.name,NULL);
+		}
+		else
+		{
+			if (parts & OUTPUT_APPLICATION_NAME)
+			{
+				output_formats[draw_state->format].output_application_name(draw_state,application,&app_name);
+			}
+
+			if (parts & OUTPUT_APPLICATION_SYNOPSIS)
+			{
+				output_formats[draw_state->format].output_application_synopsis(draw_state,application,parts,&part_name);
+			}
+	
+			if (parts & OUTPUT_APPLICATION_OPTION)
+			{
+				output_formats[draw_state->format].output_application_option(draw_state,application,parts,&part_name);
+			}
+
+			if (parts & OUTPUT_APPLICATION_COMMAND)
+			{
+				output_formats[draw_state->format].output_application_command(draw_state,application,parts,&part_name);
+			}
+
+			if (parts & OUTPUT_APPLICATION_SECTION)
+			{
+				output_formats[draw_state->format].output_application_section(draw_state,application,parts,&part_name);
+			}
 		}
 	}
 }
@@ -946,6 +1099,53 @@ static unsigned int	read_constant_record(	unsigned int	offset,
 	return (offset + 7 + type->name_length + name->name_length + brief->name_length + value->name_length);
 }
 
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : read_option_record
+ * Desc : This function reads an option record.
+ *        {short:flags,string:name,string:value,string:description}
+ *--------------------------------------------------------------------------------*/
+static unsigned int	read_option_record(	unsigned int	offset, 
+										unsigned char*	buffer,
+										unsigned short*	flags,
+										NAME*			name,
+										NAME*			value,
+										NAME*			description)
+{
+	/* get the lengths */
+	*flags						= ((unsigned short)buffer[offset + 1] << 8) | buffer[offset + 2];
+	name->name_length			= ((unsigned short)buffer[offset + 3] << 8) | buffer[offset + 4];
+	value->name_length			= ((unsigned short)buffer[offset + 5] << 8) | buffer[offset + 6];
+	description->name_length	= ((unsigned short)buffer[offset + 7] << 8) | buffer[offset + 8];
+
+	/* get the strings */
+	name->name = &buffer[offset + 9];
+	value->name = &buffer[offset + 9 + name->name_length];
+	description->name = &buffer[offset + 9 + name->name_length + value->name_length];
+
+	return (offset + 9 + name->name_length + description->name_length + value->name_length);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : read_synopsis_record
+ * Desc : This function reads a synopsis record.
+ *        {string:name,byte_list:(option_index)}
+ *--------------------------------------------------------------------------------*/
+static unsigned int	read_synopsis_record(	unsigned int	offset, 
+											unsigned char*	buffer,
+											unsigned short*	index_length,
+											unsigned char**	index,
+											NAME*			name)
+{
+	/* get the lengths */
+	name->name_length			= ((unsigned short)buffer[offset + 1] << 8) | buffer[offset + 2];
+	*index_length				= ((unsigned short)buffer[offset + 3] << 8) | buffer[offset + 4];
+
+	/* get the strings */
+	name->name	= &buffer[offset + 5];
+	*index		= &buffer[offset + 5 + name->name_length];
+
+	return (offset + 5 + name->name_length + *index_length);
+}
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : read_type_record
@@ -1413,6 +1613,252 @@ static void	add_sample(GROUP* group, NAME* name, NAME* payload)
 	}
 }
 
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: add_application
+ * @desc: This function will add an application to the GROUP tree. 
+ *        The application only lives in the root node as the application are
+ *        not grouped.
+ *--------------------------------------------------------------------------------*/
+APPLICATION*	add_application(GROUP* group, NAME* name)
+{
+	APPLICATION* result = calloc(1,sizeof(APPLICATION));
+
+	/* set up the parameter */
+	copy_name(name,&result->name);
+
+	if (group->application == NULL)
+	{
+		group->application = result;
+	}
+	else
+	{
+		result->next = group->application;
+		group->application = result;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: find_section
+ * @desc: This function will find a section in the given application.
+ *--------------------------------------------------------------------------------*/
+SECTION*	find_section(SECTION* section_list, NAME* name)
+{
+	SECTION* result = NULL;
+	SECTION* current_section = section_list;
+
+	while (current_section != NULL)
+	{
+		if (compare_name(name,&current_section->name) == 0)
+		{
+			/* found it */
+			result = current_section;
+			break;
+		}
+
+		current_section = current_section->next;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: add_app_section
+ * @desc: This function will add a section to the current application.
+ *--------------------------------------------------------------------------------*/
+SECTION*	add_app_section(APPLICATION* application,NAME* name, NAME* section_data)
+{
+	SECTION* temp;
+	SECTION* result = NULL;
+	
+	if (application != NULL)
+	{
+		if ((result = find_section(application->section_list,name)) == NULL)
+		{
+			result = calloc(1,sizeof(SECTION));
+
+			if (application->section_list == NULL)
+			{
+				application->section_list = result;
+				application->section_list->last = result;
+			}
+			else
+			{
+				application->section_list->last->next = result;
+				application->section_list->last = result;
+			}
+		}
+
+		if (result != NULL)
+		{
+			copy_name(name,&result->name);
+			copy_name(section_data,&result->section_data);
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: add_app_sub_section
+ * @desc: This function will add a sub-section.
+ *--------------------------------------------------------------------------------*/
+void	add_app_sub_section(SECTION* section,NAME* name,NAME* section_data)
+{
+	SECTION*	sub_section;
+	SECTION*	new_sub_section;
+
+	if (section != NULL)
+	{
+		if ((sub_section = find_section(section->sub_section_list,name)) == NULL)
+		{
+			sub_section = calloc(1,sizeof(SECTION));
+
+			if (section->sub_section_list == NULL)
+			{
+				section->sub_section_list = sub_section;
+				section->sub_section_list->last = sub_section;
+			}
+			else
+			{
+				section->sub_section_list->last->next = sub_section;
+				section->sub_section_list->last = sub_section;
+			}
+		}
+
+		if (sub_section != NULL)
+		{
+			copy_name(name,&sub_section->name);
+			copy_name(section_data,&sub_section->section_data);
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: add_app_option
+ * @desc: This function will add an option to the application list.
+ *--------------------------------------------------------------------------------*/
+void	add_app_option(APPLICATION* application,unsigned short option_flags,NAME* name,NAME* value,NAME* description)
+{
+	OPTION*	new_option;
+
+	if (application != NULL)
+	{
+		new_option = calloc(1,sizeof(OPTION));
+
+		if (application->option_list == NULL)
+		{
+			application->max_option_length = 4;
+			application->option_list = new_option;
+			application->option_list->last = new_option;
+		}
+		else
+		{
+			new_option->option_id = application->option_list->last->option_id + 1;
+			application->option_list->last->next = new_option;
+			application->option_list->last = new_option;
+		}
+
+		if (new_option != NULL)
+		{
+			if (name->name_length > application->max_option_length)
+			{
+				application->max_option_length = name->name_length;
+			}
+
+			new_option->flags = option_flags;
+			copy_name(name,&new_option->name);
+			copy_name(value,&new_option->value);
+			copy_name(description,&new_option->description);
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: add_app_command
+ * @desc: This funciton will add a command to the application.
+ *--------------------------------------------------------------------------------*/
+void	add_app_command(APPLICATION* application,NAME* name,NAME* parameters,NAME* description)
+{
+	COMMAND*	new_command;
+
+	if (application != NULL)
+	{
+		new_command = calloc(1,sizeof(COMMAND));
+
+		if (application->command_list == NULL)
+		{
+			application->command_list = new_command;
+			application->command_list->last = new_command;
+		}
+		else
+		{
+			application->command_list->last->next = new_command;
+			application->command_list->last = new_command;
+		}
+
+		if (new_command != NULL)
+		{
+			copy_name(name,&new_command->name);
+			copy_name(parameters,&new_command->parameters);
+			copy_name(description,&new_command->description);
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: add_app_synopsis
+ * @desc: This function will add a synopsis to the list of synopsis in the
+ *        application.
+ *
+ *        TODO: This is ridiculous MUST build an index when we load the option
+ *              save having to do this recursive search rubbish.
+ *--------------------------------------------------------------------------------*/
+void	add_app_synopsis(APPLICATION* application,NAME* name,unsigned char* index,unsigned short index_length)
+{
+	OPTION*			current_option;
+	SYNOPSIS*		new_synopsis = calloc(1,sizeof(SYNOPSIS));
+	unsigned int	index_item;
+	unsigned int	cur_index;
+
+	copy_name(name,&new_synopsis->name);
+	new_synopsis->list_length = index_length;
+	new_synopsis->list = malloc(sizeof(OPTION*)*index_length);
+	
+	/* now lookup all the options */
+	for (index_item = 0; index_item < index_length; index_item++)
+	{
+		current_option = application->option_list;
+		cur_index = 0;
+
+		while (current_option != NULL)
+		{
+			if (cur_index == index[index_item])
+			{
+				new_synopsis->list[index_item] = current_option;
+				break;
+			}
+
+			cur_index++;
+			current_option = current_option->next;
+		}
+	}
+
+	/* now add it to the list of synopsis */
+	if (application->synopsis == NULL)
+	{
+		application->synopsis = new_synopsis;
+		application->synopsis->last = new_synopsis;
+	}
+	else
+	{
+		application->synopsis->last->next = new_synopsis;
+		application->synopsis->last = new_synopsis;
+	}
+}
+
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : input_model
  * Desc : This function will input the model.
@@ -1424,11 +1870,14 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 	unsigned int		offset = 0;
 	unsigned int		result = 0;
 	unsigned int		flags;
+	unsigned short		index_length;
 	unsigned short		id;
+	unsigned short		option_flags;
 	unsigned char		sender_id = 0;
 	unsigned char		receiver_id = 0;
 	unsigned char		signature[4] = LINKED_SOURCE_MAGIC;
 	unsigned char		record[FILE_BLOCK_SIZE];
+	unsigned char*		index;
 	NAME				timeline;
 	NAME				group;
 	NAME				name;
@@ -1440,8 +1889,10 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 	STATE*				current_state;
 	GROUP*				temp_group;
 	GROUP*				current_group;
+	SECTION*			current_section;
 	TIMELINE*			current_timeline;
 	API_TYPE*			current_type;
+	APPLICATION*		current_application;
 	API_FUNCTION*		current_function;
 	API_CONSTANTS*		current_constants;
 	API_PARAMETER*		current_parameter;
@@ -1504,6 +1955,13 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 									offset = read_pair_record(offset,record,&name,&brief);
 									add_sample(group_tree,&name,&brief);
 									break;
+								
+								case LINKER_APPLICATION_START:
+									state = MODEL_LOAD_APPLICATION;
+									offset = read_string_record(offset,record,&name);
+									current_application = add_application(group_tree,&name);
+
+									break;
 
 								case LINKER_BLOCK_END:
 									offset = FILE_BLOCK_SIZE;
@@ -1511,7 +1969,7 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 
 								default:
 									hex_dump(&record[offset],16);
-									raise_warning(0,EC_UNXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
+									raise_warning(0,EC_UNEXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
 									result = 1;
 									break;
 							}
@@ -1710,7 +2168,52 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 
 								default:
 									hex_dump(&record[offset],16);
-									raise_warning(0,EC_UNXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
+									raise_warning(0,EC_UNEXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
+									result = 1;
+							}
+						}
+
+						else if (state == MODEL_LOAD_APPLICATION)
+						{
+							switch(record[offset])
+							{
+								case LINKER_APPLICATION_SECTION:
+									offset = read_pair_record(offset,record,&name,&description);
+									current_section = add_app_section(current_application,&name,&description);
+									break;
+
+								case LINKER_APPLICATION_SUB_SECTION:
+									offset = read_pair_record(offset,record,&name,&description);
+									add_app_sub_section(current_section,&name,&description);
+									break;
+
+								case LINKER_APPLICATION_OPTION:
+									offset = read_option_record(offset,record,&option_flags,&name,&value,&description);
+									add_app_option(current_application,option_flags,&name,&value,&description);
+									break;
+
+								case LINKER_APPLICATION_COMMAND:
+									offset = read_type_record(offset,record,&name,&value,&description);
+									add_app_command(current_application,&name,&value,&description);
+									break;
+
+								case LINKER_APPLICATION_SYNOPSIS:
+									offset = read_synopsis_record(offset,record,&index_length,&index,&name);
+									add_app_synopsis(current_application,&name,index,index_length);
+									break;
+
+								case LINKER_APPLICATION_END:
+									state = MODEL_LOAD_UNKNOWN;
+									offset++;
+								break;
+
+								case LINKER_BLOCK_END:
+									offset = FILE_BLOCK_SIZE;
+									break;
+
+								default:
+									hex_dump(&record[offset],16);
+									raise_warning(0,EC_UNEXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
 									result = 1;
 							}
 						}
@@ -1780,7 +2283,7 @@ static unsigned int	input_model(char* model_file, GROUP* group_tree,unsigned sho
 
 								default:
 									hex_dump(&record[offset],16);
-									raise_warning(0,EC_UNXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
+									raise_warning(0,EC_UNEXPECTED_ITEM_IN_STATE,(unsigned char*)model_file,NULL);
 									result = 1;
 							}
 						}
@@ -1939,7 +2442,10 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 	static unsigned int		model_length = sizeof(model_name) - 1;
 
 	/* default state - dump the data into the output */
+	input_state->flags = NULL;
+	input_state->flags_length = 0;
 	input_state->state = TYPE_TEXT;
+	input_state->temp_type = TYPE_TEXT;
 	input_state->output_end = input_state->buffer_pos;
 	input_state->output_start = input_state->buffer_pos;
 
@@ -1956,12 +2462,22 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 				case INPUT_STATE_INTERNAL_SEARCHING:
 					while(input_state->buffer_pos < input_state->bytes_read)
 					{
-						if (input_state->buffer[input_state->buffer_pos++] == '[')
+						if (input_state->buffer[input_state->buffer_pos] == '[')
 						{
 							input_state->model_pos = 0;
+							input_state->buffer_pos++;
 							input_state->internal_state = INPUT_STATE_INTERNAL_SCHEME;
 							break;
 						}
+						else if (
+							((input_state->buffer[input_state->buffer_pos] == 0x0a) && input_state->buffer[input_state->buffer_pos+1] != 0x0d) ||
+							((input_state->buffer[input_state->buffer_pos] == 0x0d) && input_state->buffer[input_state->buffer_pos+1] != 0x0a))
+						{
+							/* count the line numbers */
+							input_state->line_number++;
+						}
+
+						input_state->buffer_pos++;
 					}
 
 					input_state->output_end = input_state->buffer_pos;
@@ -2008,8 +2524,20 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 						input_state->output_start = input_state->buffer_pos;
 						keep_looking = 0;
 					}
+					else if (input_state->buffer[input_state->buffer_pos] == '?')
+					{
+						/* found the start of the flags */
+						input_state->flags = &input_state->buffer[input_state->buffer_pos+1];
+						input_state->flags_length = 0;
+
+						input_state->internal_state = INPUT_STATE_INTERNAL_FIND_FLAGS;
+						input_state->output_end = input_state->buffer_pos;
+						input_state->output_start = input_state->buffer_pos;
+					}
 					else
 					{
+						/* report the error */
+						raise_warning(input_state->line_number,EC_MODEL_BADLY_FORMATTED,NULL,NULL);
 						input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
 					}
 					
@@ -2017,11 +2545,14 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 					break;
 
 				case INPUT_STATE_INTERNAL_TYPE_COLLECT:
-					
+	
+					/* TODO: Fix this it is wrong - it will allow for bad names */
 					if (input_state->count == 0)
 					{
 						if ((input_state->buffer[input_state->buffer_pos] != 's') && (input_state->buffer[input_state->buffer_pos] != 'a'))
 						{
+							/* report the error */
+							raise_warning(input_state->line_number,EC_MODEL_BADLY_FORMATTED,NULL,NULL);
 							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
 						}
 						else
@@ -2035,10 +2566,6 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 						{
 							input_state->temp_type = TYPE_STATE_MACHINE;
 						}
-						else if (input_state->buffer[input_state->buffer_pos] == 'p')
-						{
-							input_state->temp_type = TYPE_API;
-						}
 						else if (input_state->buffer[input_state->buffer_pos] == 'e')
 						{
 							input_state->temp_type = TYPE_SEQUENCE_DIAGRAM;
@@ -2047,8 +2574,27 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 						{
 							input_state->temp_type = TYPE_SAMPLE;
 						}
+						else if (input_state->buffer[input_state->buffer_pos] != 'p')
+						{
+							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
+						}
+
+						input_state->count++;
+					}
+					else if (input_state->count == 2 && input_state->temp_type == TYPE_TEXT)
+					{
+						if (input_state->buffer[input_state->buffer_pos] == 'i')
+						{
+							input_state->temp_type = TYPE_API;
+						}
+						else if (input_state->buffer[input_state->buffer_pos] == 'p')
+						{
+							input_state->temp_type = TYPE_APPLICATION;
+						}
 						else
 						{
+						/* report the error */
+							raise_warning(input_state->line_number,EC_MODEL_BADLY_FORMATTED,NULL,NULL);
 							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
 						}
 
@@ -2073,13 +2619,28 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 							input_state->output_start = input_state->buffer_pos+1;
 							keep_looking = 0;
 						}
+						else if (input_state->buffer[input_state->buffer_pos] == '?')
+						{
+							/* found the start of the flags */
+							input_state->flags = &input_state->buffer[input_state->buffer_pos+1];
+							input_state->flags_length = 0;
+
+							input_state->state = input_state->temp_type;
+							input_state->internal_state = INPUT_STATE_INTERNAL_FIND_FLAGS;
+							input_state->output_end = input_state->buffer_pos+1;
+							input_state->output_start = input_state->buffer_pos+1;
+						}
 						else
 						{
+							/* report the error */
+							raise_warning(input_state->line_number,EC_MODEL_BADLY_FORMATTED,NULL,NULL);
 							input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
 						}
 					}
 					else
 					{
+						/* report the error */
+						raise_warning(input_state->line_number,EC_MODEL_BADLY_FORMATTED,NULL,NULL);
 						input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
 					}
 					
@@ -2105,15 +2666,43 @@ unsigned int	parse_input(INPUT_STATE* input_state)
 						input_state->output_start = input_state->buffer_pos+1;
 						keep_looking = 0;
 					}
+					else if (input_state->buffer[input_state->buffer_pos] == '?')
+					{
+						/* found the start of the flags */
+						input_state->flags = &input_state->buffer[input_state->buffer_pos+1];
+						input_state->flags_length = 0;
+
+						input_state->state = input_state->temp_type;
+						input_state->internal_state = INPUT_STATE_INTERNAL_FIND_FLAGS;
+						input_state->output_end = input_state->buffer_pos+1;
+						input_state->output_start = input_state->buffer_pos+1;
+
+					}
 					else
 					{
+						/* report the error */
+						raise_warning(input_state->line_number,EC_MODEL_BADLY_FORMATTED,NULL,NULL);
 						input_state->internal_state = INPUT_STATE_INTERNAL_DUMP_TILL_END;
 					}
 					
 					input_state->buffer_pos++;
 					break;
 
+				case INPUT_STATE_INTERNAL_FIND_FLAGS:
+					if (input_state->buffer[input_state->buffer_pos++] == ']')
+					{
+						input_state->state = TYPE_TEXT;
+						input_state->internal_state = INPUT_STATE_INTERNAL_SEARCHING;
+						keep_looking = 0;
+					}
+					else
+					{
+						input_state->flags_length++;
+					}
+					break;
+
 				case INPUT_STATE_INTERNAL_DUMP_TILL_END:
+
 					if (input_state->buffer[input_state->buffer_pos++] == ']')
 					{
 						/* ok, we have finished looking at the name */
@@ -2150,8 +2739,11 @@ unsigned int	process_input(GROUP* group_tree, const char* file_name,const char* 
 	}
 	else
 	{
+		g_input_filename = (char*) file_name;
+
 		if ((result = output_open(&draw_state,(char*)file_name,(unsigned char*)output_directory,output_length)) == EC_OK)
 		{
+			input_state.line_number = 1;
 			while ((input_state.bytes_read = read(input_state.input_file,input_state.buffer,FILE_BLOCK_SIZE)) > 0)
 			{
 				input_state.buffer_pos = 0;
@@ -2159,6 +2751,9 @@ unsigned int	process_input(GROUP* group_tree, const char* file_name,const char* 
 				/* now check the read in data for the markers that we are interested in */
 				while(parse_input(&input_state))
 				{
+					/* let the output format parse the flags */
+					output_parse_flags(&input_state,&draw_state);
+
 					/* action the found markers */
 					switch (input_state.state)
 					{
@@ -2182,6 +2777,10 @@ unsigned int	process_input(GROUP* group_tree, const char* file_name,const char* 
 
 						case TYPE_SAMPLE:
 							generate_sample(&draw_state,&input_state,group_tree);
+							break;
+
+						case TYPE_APPLICATION:
+							generate_application(&draw_state,&input_state,group_tree);
 							break;
 
 						default:
@@ -2242,15 +2841,38 @@ int main(int argc, const char *argv[])
 				
 				switch (argv[start][1])
 				{
-					case 'v':	/* verbose - add extra comments to the output */
+					/**-----------------------------------------------------------*
+					 * @option	-v
+					 *
+					 * @description 
+					 * This produces extra output information during the generation
+					 * of the output.
+					 *------------------------------------------------------------*/
+					case 'v':
 						verbose = 1;
 						break;
 
-					case 'q':	/* quiet - suppress non error outputs */
+					/**-----------------------------------------------------------*
+					 * @option	-q
+					 *
+					 * @description
+					 * quiet. This flag suppresses any non-error output from the
+					 * application.
+					 *------------------------------------------------------------*/
+					case 'q':
 						quiet = 1;
 						break;
 
-					case 'i':	/* input model file */
+					/**-----------------------------------------------------------*
+					 * @option		-i
+					 * @value		<input_model_file_name>
+					 * @required	yes
+					 *
+					 * @description
+					 * input model filename. This is the linked model file that
+					 * is used to generate the final documents.
+					 *------------------------------------------------------------*/
+					case 'i':
 						if (argv[start][2] != '\0')
 						{
 							input_name = (char*) &argv[start][2];
@@ -2271,7 +2893,16 @@ int main(int argc, const char *argv[])
 						}
 						break;
 
-					case 'o':	/* output directory */
+					/**-----------------------------------------------------------*
+					 * @option	-o
+					 * @value	<output directory name>
+					 *
+					 * @description
+					 * This names the directory that the output id placed in. If
+					 * this parameter is not given then the application defaults
+					 * to 'output'.
+					 *------------------------------------------------------------*/
+					case 'o':
 						if (argv[start][2] != '\0')
 						{
 							output_name = (char*) &argv[start][2];
@@ -2292,7 +2923,13 @@ int main(int argc, const char *argv[])
 						}
 						break;
 
-					case '?':	/* help  - just fail! */
+					/**-----------------------------------------------------------*
+					 * @option		-?
+					 *
+					 * @description
+					 * This outputs the help message.
+					 *------------------------------------------------------------*/
+					case '?':
 						failed = 1;
 						break;
 
@@ -2324,6 +2961,20 @@ int main(int argc, const char *argv[])
 				/* name the default group "default" */
 				memcpy(temp->name,"default",7);
 				temp->name_length = 7;
+
+				/**-----------------------------------------------------------*
+				 * @option 		files
+				 * @required	yes
+				 * @multiple	yes
+				 *
+				 * @description
+				 * One or more document files to produce output for. This file
+				 * contains the markup that will be processed and will be used
+				 * as the structure for producing the output.
+				 *------------------------------------------------------------*/
+				
+				/* init the output system */
+				output_initialise();
 
 				for (start=1; start < argc; start++)
 				{

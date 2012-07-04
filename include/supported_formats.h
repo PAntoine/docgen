@@ -48,6 +48,47 @@ typedef struct
 
 #define OUTPUT_DEFAULT	(OUTPUT_TEXT)
 
+/*--------------------------------------------------------------------------------*
+ * Structures for output flags
+ *--------------------------------------------------------------------------------*/
+#define	OUTPUT_FLAG_TYPE_INVALID	((unsigned int) 0x00000000)		/* invalid type */
+#define	OUTPUT_FLAG_TYPE_BOOLEAN	((unsigned int) 0x00000001)		/* the flag expects a true/false value (and converts to 1/0) */
+#define OUTPUT_FLAG_TYPE_STRING		((unsigned int) 0x00000002)		/* the flag expects a string value */
+#define OUTPUT_FLAG_TYPE_NUMBER		((unsigned int) 0x00000004)		/* the flag expects a numeric value to be passed in */
+#define OUTPUT_FLAG_TYPE_REAL		((unsigned int) 0x00000008)		/* the flag expects a floating point numeric value to be passed in */
+
+typedef struct
+{
+	unsigned char*	name;
+	unsigned int	id;
+	unsigned int	hash;
+	unsigned int	name_length;
+	unsigned int	type;
+
+} OUTPUT_FLAG;
+
+/* the flag list for a type */
+typedef struct
+{
+	unsigned int	num_flags;
+	OUTPUT_FLAG*	flag_list;
+
+} OUTPUT_FLAG_LIST;
+
+typedef struct
+{
+	unsigned int	type;
+	unsigned int	id;
+
+	union
+	{
+		unsigned char	boolean;
+		int				number;
+		float			real;
+		NAME			string;
+	} value;
+
+} OUTPUT_FLAG_VALUE;
 
 /*--------------------------------------------------------------------------------*
  * API Parts Decode Definitions.
@@ -63,11 +104,12 @@ typedef struct
 #define	OUTPUT_API_MULTIPLE					((unsigned int) (0x80000000))
 
 /* what to dump */
+#define	OUTPUT_API_APPLICATON				((unsigned int) (0x10000000))
 #define	OUTPUT_API_FUNCTIONS				((unsigned int) (0x08000000))
 #define	OUTPUT_API_TYPES					((unsigned int) (0x04000000))
 #define	OUTPUT_API_CONSTANTS				((unsigned int) (0x02000000))
 #define	OUTPUT_API_GLOBALS					((unsigned int) (0x01000000))
-#define	OUTPUT_API_ALL						((unsigned int) (0x0F000000))
+#define	OUTPUT_API_ALL						((unsigned int) (0x1F000000))
 
 /* the parts of a function description */
 #define	OUTPUT_API_FUNCTION_NAME			((unsigned int) (0x00000001))
@@ -91,9 +133,23 @@ typedef struct
 #define OUTPUT_API_CONSTANTS_ALL_PARTS		((unsigned int) (0x0000F000))
 
 /*--------------------------------------------------------------------------------*
+ * Application parts 
+ *--------------------------------------------------------------------------------*/
+#define OUTPUT_APPLICATION_NAME				((unsigned int)	(0x00000001))
+#define OUTPUT_APPLICATION_SECTION			((unsigned int)	(0x00000002))
+#define OUTPUT_APPLICATION_OPTION			((unsigned int)	(0x00000004))
+#define OUTPUT_APPLICATION_COMMAND			((unsigned int)	(0x00000008))
+#define OUTPUT_APPLICATION_SYNOPSIS			((unsigned int)	(0x00000010))
+#define OUTPUT_APPLICATION_ALL_PARTS		((unsigned int) (0x0000001F))
+
+#define OUTPUT_APPLICATION_MULTIPLE			((unsigned int) (0x80000000))
+
+/*--------------------------------------------------------------------------------*
  * Function Pointer Types for the output functions.
  *--------------------------------------------------------------------------------*/
 typedef struct tag_draw_state DRAW_STATE;
+
+typedef unsigned int	(*OUTPUT_DECODE_FLAGS_FUNCTION)		(INPUT_STATE* input_state, unsigned hash,NAME* value);
 
 typedef unsigned int	(*OUTPUT_OPEN_FUNCTION)				(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length);
 typedef void			(*OUTPUT_CLOSE_FUNCTION)			(DRAW_STATE* draw_state);
@@ -125,11 +181,21 @@ typedef void			(*OUTPUT_CONSTANTS_RECORDS_FUNCTION)	(DRAW_STATE* draw_state, API
 typedef void			(*OUTPUT_CONSTANTS_DESCRIPTION_FUNCTION)(DRAW_STATE* draw_state, API_CONSTANTS* constants);
 typedef void			(*OUTPUT_CONSTANT_NAME_FUNCTION)		(DRAW_STATE* draw_state, API_CONSTANTS* constants);
 
+typedef void			(*OUTPUT_APPLICATION_NAME_FUNCTION)		(DRAW_STATE* draw_state,APPLICATION* application,NAME* name);
+typedef void			(*OUTPUT_APPLICATION_SYNOPSIS_FUNCTION)	(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+typedef void			(*OUTPUT_APPLICATION_OPTION_FUNCTION)	(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+typedef void			(*OUTPUT_APPLICATION_COMMAND_FUNCTION)	(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+typedef void			(*OUTPUT_APPLICATION_SECTION_FUNCTION)	(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+typedef void			(*OUTPUT_APPLICATION_SUBSECTION_FUNCTION)(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+
 typedef struct
 {
 	unsigned char*				format_name;
 	unsigned int				format_name_length;
 
+	/* function for decoding the type specific flags */
+	OUTPUT_DECODE_FLAGS_FUNCTION	decode_flags;
+	
 	/* generic functions called for all diagrams */
 	OUTPUT_OPEN_FUNCTION		output_open;
 	OUTPUT_CLOSE_FUNCTION		output_close;
@@ -166,11 +232,21 @@ typedef struct
 	OUTPUT_CONSTANTS_DESCRIPTION_FUNCTION	output_constant_description;
 	OUTPUT_CONSTANT_NAME_FUNCTION			output_constant_name;
 
+	/* Application functions */
+	OUTPUT_APPLICATION_NAME_FUNCTION		output_application_name;
+	OUTPUT_APPLICATION_SYNOPSIS_FUNCTION    output_application_synopsis;
+	OUTPUT_APPLICATION_OPTION_FUNCTION      output_application_option;
+	OUTPUT_APPLICATION_COMMAND_FUNCTION     output_application_command;
+	OUTPUT_APPLICATION_SECTION_FUNCTION     output_application_section;
+
 } OUTPUT_FORMATS;
 
 /*--------------------------------------------------------------------------------*
- * Graph output function defines.
+ * Output function defines.
  *--------------------------------------------------------------------------------*/
+#define	OUTPUT_FORMAT_FLAGS_PAGED	((unsigned int)	0x00000001)
+#define	OUTPUT_FORMAT_FLAGS_INLINE	((unsigned int)	0x00000002)
+
 typedef struct
 {
 	unsigned short	num_columns;
@@ -186,6 +262,10 @@ struct tag_draw_state
 	unsigned int	format;
 	unsigned int	path_length;
 	unsigned int	page_width;				/* this is a type dependant page width */
+	unsigned int	margin_width;
+	unsigned int	format_flags;
+	unsigned int	global_margin_width;
+	unsigned int	global_format_flags;
 	unsigned char	path[FILENAME_MAX];
 	unsigned char*	buffer;
 	unsigned char*	output_buffer;			/* random buffer controlled by the type code */
@@ -197,16 +277,17 @@ struct tag_draw_state
 	data;
 };
 
-
 /*--------------------------------------------------------------------------------*
  * Function prototypes for the global functions
  *--------------------------------------------------------------------------------*/
+void			output_initialise(void);
 unsigned int	output_open(DRAW_STATE* draw_state, char* file_name, unsigned char* path, unsigned int path_length);
 void			output_close(DRAW_STATE* draw_state);
 
 /*--------------------------------------------------------------------------------*
  * TEXT format function types
  *--------------------------------------------------------------------------------*/
+unsigned int	text_decode_flags_function(INPUT_STATE* input_state, unsigned int hash, NAME* value);
 unsigned int	text_open(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length);
 void			text_close(DRAW_STATE* draw_state);
 void			text_output_header(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length);
@@ -231,6 +312,11 @@ void			text_output_type_records_function(DRAW_STATE* draw_state, API_TYPE* type)
 void			text_output_constants_records_function(DRAW_STATE* draw_state, API_CONSTANTS* constants);
 void			text_output_constants_description_function(DRAW_STATE* draw_state, API_CONSTANTS* constants);
 void			text_output_constant_name_function(DRAW_STATE* draw_state, API_CONSTANTS* constants);
+void			text_output_application_name_function(DRAW_STATE* draw_state,APPLICATION* application,NAME* name);
+void			text_output_application_synopsis_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+void			text_output_application_option_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+void			text_output_application_command_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
+void			text_output_application_section_function(DRAW_STATE* draw_state,APPLICATION* application,unsigned int parts,NAME* name);
 
 /*--------------------------------------------------------------------------------*
  * DOT format function types
@@ -241,6 +327,13 @@ void	dot_output_message(DRAW_STATE* draw_state, MESSAGE* message);
 void	dot_output_timelines(DRAW_STATE* draw_state, TIMELINE* timeline);
 void	dot_output_states(DRAW_STATE* draw_state, STATE* list);
 void	dot_output_state(DRAW_STATE* draw_state, STATE* state);
+
+/*--------------------------------------------------------------------------------*
+ * output flag functions.
+ *--------------------------------------------------------------------------------*/
+void			output_init_flag_list(OUTPUT_FLAG_LIST* list);
+unsigned int	output_find_flag(OUTPUT_FLAG_LIST* list, unsigned int option_hash, NAME* value, OUTPUT_FLAG_VALUE* flag_value);
+void			output_parse_flags(INPUT_STATE* input_state, DRAW_STATE* draw_state);
 
 
 

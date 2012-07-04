@@ -13,8 +13,6 @@
 #                    Released Under the Artistic Licence
 #---------------------------------------------------------------------------------
 
-.PHONY: tests
-
 export CC ?= gcc
 export MKDIR ?= mkdir
 export RM_F ?= rm -rf
@@ -78,25 +76,36 @@ endif
 #--------------------------------------------------------------------------------
 HEADER_FILES 		= $(wildcard include/*.h)
 COMMON_OBJECTS 		= object/atoms.o object/utilities.o object/error_codes.o
-LINKER_OBJECTS 		= 
-COMPILER_OBJECTS	= object/symbols.o object/input_formats.o object/c_cpp_input_functions.o
-PROCESSOR_OBJECTS	= object/supported_formats.o object/text_output_functions.o
+LINKER_OBJECTS 		= object/document_linker.o
+COMPILER_OBJECTS	= object/symbols.o object/input_formats.o object/c_cpp_input_functions.o object/document_source_compiler.o
+PROCESSOR_OBJECTS	= object/supported_formats.o object/text_output_functions.o object/document_processor.o
 
 #--------------------------------------------------------------------------------
-# Build targets.
+# Document targets.
 #--------------------------------------------------------------------------------
+HEADER_DOCS			= $(subst include/,object/,$(subst .h,.h.pdso,$(HEADER_FILES)))
+LINKER_DOCS			= $(subst .o,.c.pdso,$(LINKER_OBJECTS) $(COMMON_OBJECTS))
+COMPILER_DOCS		= $(subst .o,.c.pdso,$(COMPILER_OBJECTS) $(COMMON_OBJECTS))
+PROCESSOR_DOCS		= $(subst .o,.c.pdso,$(PROCESSOR_OBJECTS) $(COMMON_OBJECTS))
+PDP_DOCS			= $(wildcard docs/pdp/source/*.md)
+
+#--------------------------------------------------------------------------------
+# Executable Targets.
+#--------------------------------------------------------------------------------
+.PHONY: tests $(PDP_DOCS)
+
 all: exes tests
 
-exes: pdsc pdsl pdp
+exes: pdsc pdsl pdp pdsc_docs pdsl_docs pdp_docs
 
-pdsc : object $(COMMON_OBJECTS) $(COMPILER_OBJECTS) source/document_source_compiler.c
-	@$(CC) $(CFLAGS) source/document_source_compiler.c -o pdsc $(COMPILER_OBJECTS) $(COMMON_OBJECTS) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+pdsc : object include/atoms.h $(COMMON_OBJECTS) $(COMPILER_OBJECTS)
+	@$(CC) $(CFLAGS) -o pdsc $(COMPILER_OBJECTS) $(COMMON_OBJECTS)
 
-pdsl : object $(COMMON_OBJECTS) $(LINKER_OBJECTS) source/document_linker.c
-	@$(CC) $(CFLAGS) source/document_linker.c -o pdsl $(LINKER_OBJECTS) $(COMMON_OBJECTS) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+pdsl : object $(COMMON_OBJECTS) $(LINKER_OBJECTS)
+	@$(CC) $(CFLAGS) -o pdsl $(LINKER_OBJECTS) $(COMMON_OBJECTS)
 
-pdp : object $(COMMON_OBJECTS) $(PROCESSOR_OBJECTS) source/document_processor.c
-	@$(CC) $(CFLAGS) source/document_processor.c -o pdp $(PROCESSOR_OBJECTS) $(COMMON_OBJECTS) -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+pdp : object $(COMMON_OBJECTS) $(PROCESSOR_OBJECTS)
+	@$(CC) $(CFLAGS) -o pdp $(PROCESSOR_OBJECTS) $(COMMON_OBJECTS)
 
 tests: pdsc pdsl pdp
 	@$(MAKE) -C tests
@@ -107,8 +116,36 @@ include/symbols.h source/symbols.c: source/symbols.list
 include/atoms.h source/atoms.c: source/atoms.list
 	@buildgraph -q source/atoms.list source/atoms -h include/ -p "ATOM_"
 
-object/%.o : source/%.c $(HEADER_FILES)
+object/%.o : source/%.c
 	@$(CC) $(CFLAGS) -c -o $@ $< -I include -DPATH_SEPARATOR="$(PATH_SEPARATOR)"
+
+#--------------------------------------------------------------------------------
+# Document Targets.
+#--------------------------------------------------------------------------------
+pdsc_docs:	object/pdsc.gout
+pdsl_docs:	object/pdsl.gout
+pdp_docs:	$(PDP_DOCS)
+
+$(PDP_DOCS): object/pdp.gout
+	@$(DEBUG_FUNC) ./pdp -iobject/pdp.gout $@
+
+object/pdsc.gout: $(COMPILER_DOCS) $(HEADER_DOCS)
+	@echo Linking Compiler Documents...
+	@$(DEBUG_FUNC) ./pdsl $(COMPILER_DOCS) $(HEADER_DOCS) -o $@
+
+object/pdsl.gout: $(LINKER_DOCS) $(HEADER_DOCS)
+	@echo Linking Linker Documents...
+	@$(DEBUG_FUNC) ./pdsl $(LINKER_DOCS) $(HEADER_DOCS) -o $@
+
+object/pdp.gout: $(PROCESSOR_DOCS) $(HEADER_DOCS)
+	@echo Linking processor Documents...
+	@$(DEBUG_FUNC) ./pdsl $(PROCESSOR_DOCS) $(HEADER_DOCS) -o $@
+
+object/%.h.pdso : include/%.h pdsc
+	@$(DEBUG_FUNC) ./pdsc -o $@ $< $(DOC_COMPILE_FLAGS)
+
+object/%.c.pdso : source/%.c pdsc
+	@$(DEBUG_FUNC) ./pdsc -o $@ $< $(DOC_COMPILE_FLAGS)
 
 object:
 	@$(MKDIR) object 
@@ -117,12 +154,12 @@ release:
 	git checkout master^0
 	git reset --soft release
 	git rm --ignore-unmatch -rf $(PRUNE_LIST)
-	git commit -m "$(VERSION_NAME)"
+	git commit
 	git branch new_temp
 	git checkout new_temp
 	git branch -M release
 	git tag $(VERSION_NAME)
-	git checkout master
+	git checkout -f master
 
 clean:
 	@$(RM) source/atoms.c

@@ -33,19 +33,49 @@ static unsigned int		state_machine_diagram_len = sizeof(state_machine_diagram_na
 #define	STATE_MACHINE_DIAGRAM_LEN	(sizeof(state_machine_diagram_name)-1)
 
 /*--------------------------------------------------------------------------------*
+ * Generic output type flags.
+ *--------------------------------------------------------------------------------*/
+unsigned char	paged_string[] 	= "paged";
+unsigned char	margin_string[]	= "margin";
+unsigned char	inline_string[]	= "inline";
+
+#define	PAGED_SIZE 		(sizeof(paged_string) - 1)
+#define MARGIN_SIZE		(sizeof(margin_string) - 1)
+#define INLINE_SIZE		(sizeof(inline_string) - 1)
+
+#define GENERIC_OUTPUT_FLAG_PAGED	((unsigned int) 1)
+#define GENERIC_OUTPUT_FLAG_MARGIN	((unsigned int) 2)
+#define GENERIC_OUTPUT_FLAG_INLINE	((unsigned int) 3)
+
+static	OUTPUT_FLAG	generic_out_flags[] =
+{
+	{paged_string,	GENERIC_OUTPUT_FLAG_PAGED 	,0,	PAGED_SIZE,		OUTPUT_FLAG_TYPE_BOOLEAN},
+	{margin_string,	GENERIC_OUTPUT_FLAG_MARGIN	,0,	MARGIN_SIZE,	OUTPUT_FLAG_TYPE_NUMBER},
+	{inline_string,	GENERIC_OUTPUT_FLAG_INLINE	,0,	INLINE_SIZE,	OUTPUT_FLAG_TYPE_BOOLEAN}
+};
+
+#define	OUTPUT_FLAG_SIZE	((sizeof(generic_out_flags)/sizeof(generic_out_flags[0])))
+
+static	OUTPUT_FLAG_LIST	g_flag_list = {OUTPUT_FLAG_SIZE,generic_out_flags};
+
+/*--------------------------------------------------------------------------------*
  * static structures.
  *--------------------------------------------------------------------------------*/
 
 OUTPUT_FORMATS	output_formats[] = 
 {
-	{text_fmt,	TEXT_LEN,	text_open,text_close,text_output_header,text_output_footer,text_output_raw,text_output_sample,
+	{text_fmt,	TEXT_LEN,	text_decode_flags_function,
+							text_open,text_close,text_output_header,text_output_footer,text_output_raw,text_output_sample,
 							text_output_timelines,text_output_message,
 							text_output_states,	text_output_start_state,text_output_transition,text_output_end_state,
 							text_output_api_name_function, text_output_api_description_function, text_output_api_prototype_function,
 							text_output_api_parameters_function, text_output_api_action_function, text_output_api_returns_function,
 							text_output_type_name_function, text_output_type_description_function, text_output_type_records_function,
 							text_output_constants_records_function, text_output_constants_description_function, 
-							text_output_constant_name_function
+							text_output_constant_name_function,
+							text_output_application_name_function, text_output_application_synopsis_function,
+							text_output_application_option_function, text_output_application_command_function,
+							text_output_application_section_function
 	}
 
 #if 0
@@ -99,7 +129,6 @@ unsigned int	extend_path(unsigned char* path_name, unsigned int* path_length, un
 	return result;
 }
 
-
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : get_filename
  * Desc : This function will return the filename part of the path. It will remove
@@ -141,6 +170,19 @@ void	get_filename(unsigned char* path, unsigned char** file_name, unsigned int* 
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * name: output_initialise
+ * desc: This function will initialise the output system. It will load any of
+ *       the output modules.
+ *
+ * TODO: Actually load the output modules, using some form of shared object
+ *       loader.
+ *--------------------------------------------------------------------------------*/
+void	output_initialise(void)
+{
+	output_init_flag_list(&g_flag_list);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * Name : output_open
  * Desc : This function will open the output and set up any handles that are
  *        required for the output format.
@@ -162,6 +204,11 @@ unsigned int	output_open(DRAW_STATE* draw_state, char* input_file_name, unsigned
 	unsigned char*	file_name;
 
 	draw_state->format = OUTPUT_TEXT;
+
+	/* set the per section defaults */
+	draw_state->global_margin_width = 4;
+	draw_state->global_format_flags = 0;
+
 	get_filename((unsigned char*)input_file_name,&file_name,&file_name_length);
 
 	if (draw_state->format < OUTPUT_FORMATS_MAX)
@@ -197,4 +244,260 @@ void	output_close(DRAW_STATE* draw_state)
 		close(draw_state->output_file);
 	}
 }
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * name: output_init_flag_list
+ * desc: Set up the flag list so it can be searched. This function mostly will
+ *       hash the strings so that searching is quicker.
+ *--------------------------------------------------------------------------------*/
+void	output_init_flag_list(OUTPUT_FLAG_LIST* list)
+{
+	unsigned int	count;
+
+	for (count=0; count < list->num_flags; count++)
+	{
+		list->flag_list[count].hash = fnv_32_hash(list->flag_list[count].name,list->flag_list[count].name_length);
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: boolean_check
+ * @desc: This function will check to see if the value matches true or false. 
+ *        If the value is empty, then the answer will default to true, if the
+ *        value does not match true, then it will be false.
+ *--------------------------------------------------------------------------------*/
+unsigned char	boolean_check(NAME* value)
+{
+	unsigned char result = 1;
+
+	if (value->name_length > 0)
+	{
+		if (value->name_length != 4 || memcmp(value->name,"true",4) != 0)
+		{
+			result = 0;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: number_check
+ * @desc: This function will decode a number into a signed int.
+ *--------------------------------------------------------------------------------*/
+int	number_check(NAME* value)
+{
+	unsigned int pos = 0;
+	unsigned int result = 0;
+
+	if (value->name_length == 0)
+	{
+		result = 0;
+	}
+	else
+	{
+		if (value->name[0] == '-')
+		{
+			result = -1;
+			pos = 1;
+		}
+
+		while (pos < value->name_length)
+		{
+			if (value->name[pos] >= '0' && value->name[pos] <= '9')
+			{
+				result = (result * 10) + (value->name[pos] - '0');
+			}
+			else
+			{
+				/* failed return 0 */
+				result = 0;
+				break;
+			}
+
+			pos++;
+		}
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: real_check
+ * @desc: This function will decode a float from a string.
+ *--------------------------------------------------------------------------------*/
+float	real_check(NAME* value)
+{
+	float			result = 0;
+	float			number;
+	unsigned int	pos = 0;
+	unsigned int	no_point = 1;
+
+	if (value->name[0] == '-')
+		result = -1.0;
+
+	while (pos < value->name_length)
+	{
+		if (value->name[pos] >= '0' && value->name[pos] <= '9')
+		{
+			number = (number * 10.0) + (value->name[pos] - '0');
+		}
+		else if (value->name[pos] == '.' && no_point)
+		{
+			result += number;
+			number = 0;
+			no_point = 0;
+		}
+		else
+		{
+			result = 0;
+			break;
+		}
+
+		pos++;
+	}
+
+	if (!no_point && number > 0)
+	{
+		result += 1/number;
+	}
+
+	return result;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * name: output_find_flag
+ * desc: This function will decode a option flag and decode the value in the 
+ *       value field.
+ *--------------------------------------------------------------------------------*/
+unsigned int	output_find_flag(OUTPUT_FLAG_LIST* list, unsigned int option_hash, NAME* value, OUTPUT_FLAG_VALUE* flag_value)
+{
+	unsigned int	count;
+
+	flag_value->type = OUTPUT_FLAG_TYPE_INVALID;
+
+	for (count=0; count < list->num_flags; count++)
+	{
+		if (list->flag_list[count].hash == option_hash)
+		{
+			flag_value->id	 = count;
+			flag_value->type = list->flag_list[count].type;
+			break;
+		}
+	}
+
+	switch (flag_value->type)
+	{
+		case OUTPUT_FLAG_TYPE_BOOLEAN: 	flag_value->value.boolean	= boolean_check(value);	break;
+		case OUTPUT_FLAG_TYPE_NUMBER:	flag_value->value.number	= number_check(value);	break;
+		case OUTPUT_FLAG_TYPE_REAL:		flag_value->value.real		= real_check(value);	break;
+		case OUTPUT_FLAG_TYPE_STRING:
+			flag_value->value.string.name			= value->name;
+			flag_value->value.string.name_length	= value->name_length;
+			break;
+	}
+
+	return flag_value->type;
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * @name: output_set_flag
+ * @desc: This function will set global draw state flags.
+ *--------------------------------------------------------------------------------*/
+static void	output_set_flag(DRAW_STATE* draw_state, OUTPUT_FLAG_VALUE* flag_value)
+{
+	if (flag_value->type == OUTPUT_FLAG_TYPE_BOOLEAN && flag_value->value.boolean)
+	{
+		switch(flag_value->id)
+		{
+			case GENERIC_OUTPUT_FLAG_PAGED:		draw_state->format_flags |= OUTPUT_FORMAT_FLAGS_PAGED;	break;
+			case GENERIC_OUTPUT_FLAG_INLINE:	draw_state->format_flags |= OUTPUT_FORMAT_FLAGS_INLINE;	break;
+		}
+	}
+	else
+	{
+		switch(flag_value->id)
+		{
+			case GENERIC_OUTPUT_FLAG_MARGIN:	draw_state->margin_width = flag_value->value.number;	break;
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * name  output_parse_flags
+ * desc  This function will parse the input flags. If the flags are not one of
+ *       the standard flags then the input will be passed onto the specified 
+ *       formats to see if it is known.
+ *--------------------------------------------------------------------------------*/
+void	output_parse_flags(INPUT_STATE* input_state, DRAW_STATE* draw_state)
+{
+	unsigned int		pos = 0;
+	unsigned int		hash;
+	unsigned int		last_flag = 0;
+	unsigned int		last_equals = 0;
+	NAME				value;
+	OUTPUT_FLAG_VALUE	flag_value;
+
+	/* reset the format flags */
+	draw_state->margin_width = draw_state->global_margin_width;
+	draw_state->format_flags = draw_state->global_format_flags;
+
+	while (pos < input_state->flags_length)
+	{
+		if (input_state->flags[pos] == '=')
+		{
+			last_equals = pos;
+		}
+		else if (input_state->flags[pos] == ',')
+		{
+			value.name			= &input_state->flags[last_equals+1];
+			value.name_length	= pos - last_equals - 2;
+
+			hash = fnv_32_hash(&input_state->flags[last_flag],(last_equals - last_flag));
+
+			/* look in the global list first, then in the format specific one after */
+			if (output_find_flag(&g_flag_list,hash,&value,&flag_value) == OUTPUT_FLAG_TYPE_INVALID)
+			{
+				if (output_formats[draw_state->format].decode_flags(input_state,hash,&value) == OUTPUT_FLAG_TYPE_INVALID)
+				{
+					raise_warning(input_state->line_number,EC_UNKNOWN_OUTPUT_FLAG,value.name,NULL);
+				}
+			}
+			else
+			{
+				/* set the output flags */
+				output_set_flag(draw_state,&flag_value);
+			}
+
+			last_flag = pos + 1;
+			last_equals = pos + 1;
+		}
+
+		pos++;
+	}
+
+	/* catch the last option */
+	if (pos > last_flag)
+	{
+		value.name			= &input_state->flags[last_equals+1];
+		value.name_length	= pos - last_equals - 1;
+
+		hash = fnv_32_hash(&input_state->flags[last_flag],(last_equals - last_flag));
+
+		if (output_find_flag(&g_flag_list,hash,&value,&flag_value) == OUTPUT_FLAG_TYPE_INVALID)
+		{
+			/* look in the global list first, then in the format specific one after */
+			if (output_formats[draw_state->format].decode_flags(input_state,hash,&value) == OUTPUT_FLAG_TYPE_INVALID)
+			{
+				raise_warning(input_state->line_number,EC_UNKNOWN_OUTPUT_FLAG,value.name,NULL);
+			}
+		}
+		else
+		{
+			/* set the output flags */
+			output_set_flag(draw_state,&flag_value);
+		}
+	}
+}
+
 
