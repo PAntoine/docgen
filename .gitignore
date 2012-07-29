@@ -23,9 +23,10 @@ R.java
 *.pdso
 *.png
 *.dot
-pdp
-pdsl
-pdsc
 object
 tags
 tests
+output
+docs/html
+docs/manpage
+docs/text

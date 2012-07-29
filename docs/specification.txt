@@ -176,7 +176,7 @@ The extra files should be based on Mark-Down and any output produced by the syst
 using the Markdown reference escape [...] with the URI of model:/<atom_name>, i,e,
 
 [model:/group_name/state_machine]
-<model:/group_name/timeline]
+[model:/group_name/timeline]
 
 the default diagrams can be references via:
 
