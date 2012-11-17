@@ -27,6 +27,10 @@ test_for_branch = true
 CFLAGS			+= $(COPTS_RELEASE)
 endif
 
+ifeq ("$(MAKECMDGOALS)","dry_run_release")
+CFLAGS			+= $(COPTS_RELEASE)
+endif
+
 ifeq ("$(MAKECMDGOALS)","binary_release")
 RELEASE_LIST = $(BINARY_RELEASE_LIST)
 test_for_branch = true
@@ -49,6 +53,34 @@ endif
 endif
 
 #--------------------------------------------------------------------------------
+# Workout what files are not wanted to be released.
+#
+# This might be a little to clever for it's own good. But, what it does is to
+# generate all the subdirectories that have to be kept in the list to get the
+# release directories. This means that we can use wildcard to get all the 
+# effected directories then filter-out the list below then delete the 
+# directories.
+#
+# CALL_MAP  - Starts of the recursive call, but it is only here to allow a
+#             single call with a single list to do this.
+# MAP       - This is the termination case using the $if.
+# SUB_MAP   - This does the work. Recursively calls MAP, after removing the
+#             head, then adds the current output list into a new list and
+#             appends the head as a new item to that. After that it outputs
+#             the current list.
+#
+# I would leave it alone if you don't get functional programming and the
+# car/cdr list processing model.
+#--------------------------------------------------------------------------------
+SUB_MAP			=	$(call MAP,$(wordlist 2,$(words $(1)),$(1)),$(2)/$(word 2,$(1))) $(2)
+MAP				=	$(if $(1),$(call SUB_MAP,$(1),$(2)))
+CALL_MAP		=	$(call MAP,$(1),$(firstword $(1)))
+
+RELEASABLE_TREE	= $(foreach name,$(RELEASE_LIST),$(call CALL_MAP,$(subst /, ,$(name))))
+NEED_PRUNING	= $(sort $(filter-out $(RELEASE_LIST),$(foreach name,$(RELEASE_LIST),$(call CALL_MAP,$(subst /, ,$(name))))))
+PRUNABLE_DIRS	= $(foreach dir_name,$(NEED_PRUNING),$(wildcard $(dir_name)/*)) $(filter-out $(RELEASE_LIST),$(wildcard *))
+	
+#--------------------------------------------------------------------------------
 # Other things used in the release
 #--------------------------------------------------------------------------------
 MESSAGE_STRING	= Released on $(NICE_BUILD_TIME) from branch $(CURRENT_BRANCH)
@@ -59,6 +91,8 @@ RELEASE_FILES	= $(addprefix $(RELEASE_ROOT)$(GOOD_SLASH),$(RELEASE_LIST))
 #--------------------------------------------------------------------------------
 # Build Targets
 #--------------------------------------------------------------------------------
+PRUNE_LIST	= $(filter-out $(RELEASE_LIST),$(filter-out $(RELEASABLE_TREE),$(PRUNABLE_DIRS)))
+
 check_repository:
 	@echo Checking that all files are checked in...
 	@git diff-index --quiet HEAD
@@ -66,22 +100,26 @@ check_repository:
 	@git ls-files --exclude-standard --others
 	@$(call TEST_EMPTY_STRING,git ls-files --exclude-standard --others)
 
-dry_run_release: clean build
+dry_run_release: clean build docs
+	@$(MAKE) -s -C tests tests
 	@echo and the following are going to be released:
 	@echo $(RELEASE_LIST)
 
-source_release: check_repository clean build 
+source_release: check_repository clean build docs
+	@$(MAKE) -s -C tests tests
 	@git checkout $(CURRENT_BRANCH)^0
 	@git reset --soft release
+	@git rm --ignore-unmatch -rf $(PRUNE_LIST)
 	@git add $(RELEASE_LIST) .gitattributes .gitignore .banner
 	@git add -f $(IGNORED_RELEASE_LIST)
+	@git clean -fd
 	@git commit
 	@git branch new_temp
 	@git checkout new_temp
 	@git branch -M release
-	@git tag $(VERSION_NAME) -m $(MESSAGE_STRING)
+	@git tag $(VERSION_NAME)
 	@git checkout -f $(CURRENT_BRANCH)
-	@git tag SOURCE_$(VERSION_NAME)
+	@git tag source_$(VERSION_NAME)
 
 binary_release: check_repository clean build
 	@tar -czf $(RELEASE_NAME).tar.gz -C .. $(RELEASE_FILES)

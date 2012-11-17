@@ -24,6 +24,7 @@ ifeq (,$(findstring :,$(CURDIR)))
  export MV = mv
  export RM_F = rm -f
  export COPY = cp
+ export COPYDIR = cp -r
  export CD = cd
  export RMSUBDIR = rm -rf
  export MKDIR = mkdir
@@ -49,6 +50,7 @@ ifeq (,$(findstring :,$(CURDIR)))
  export RM = del
  export RM_F = del /q
  export COPY = copy
+ export COPYDIR = copy /S
  export CD = cd
  export RMSUBDIR = rmdir /Q /S
  export MKDIR = mkdir

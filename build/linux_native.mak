@@ -21,7 +21,7 @@ export AROPTS = -r -c
 export CFLAGS = -ansi -pedantic -funsigned-char -Wno-long-long -Wmissing-field-initializers -Wmissing-declarations 
 export COPTS_DEBUG = -g -O0
 export COPTS_RUN = -g
-export COPTS_RELEASE = -O2 -Werror
+export COPTS_RELEASE = -Werror
 export LINK_OUT = -o
 
 ifdef DEBUG

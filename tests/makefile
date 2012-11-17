@@ -21,6 +21,9 @@ OBJECT_FILES = $(SRC_OBJ_FILES) $(HDR_OBJ_FILES)
 
 DOC_COMPILE_FLAGS = -DSTATE_ONE=test_one
 
+binary_release: tests
+source_release: tests
+dry_run_release: tests
 build: tests
 tests: object docs
 
@@ -48,6 +51,9 @@ object/%.c.pdso : source/%.c $(BUILD_ROOT)/output/pdsc
 
 object:
 	@$(MKDIR) object 
+	@$(MKDIR) output
+	@$(COPYDIR) $(BUILD_ROOT)/support_files/* $(BUILD_ROOT)/output
+	@$(RM) $(BUILD_ROOT)/output/makefile 
 
 clean:
 	@$(RMSUBDIR) output

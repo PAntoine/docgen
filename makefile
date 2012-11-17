@@ -54,7 +54,7 @@ include build/$(BUILD_TYPE).mak
 
 build: output $(BUILD_COMPONENTS)
 
-docs: build $(DOCS_COMPONENTS)
+docs: build tests $(DOCS_COMPONENTS)
 
 clean: $(CLEAN_COMPONENTS)
 	@-$(RMSUBDIR) object

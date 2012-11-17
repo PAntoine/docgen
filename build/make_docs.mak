@@ -42,6 +42,9 @@ DOC_DEPENDENCES		= $(addprefix docs_,$(DEPENDENCES))
 #---------------------------------------------------------------------------------
 .PHONY: docs sub_make $(DOC_DEPENDENCES) 
 
+binary_release: docs
+source_release: docs
+dry_run_release: docs
 docs: $(DOC_DEPENDENCES) make_$(TARGET_NAME).deps docs_srcs $(BUILD_ROOT)/docs
 
 # object has to be build in the recursive call else the dependency is empty
