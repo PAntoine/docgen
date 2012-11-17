@@ -25,7 +25,8 @@ R.java
 *.dot
 object
 tags
-tests
+tests/output
+tests/object
 output
 docs/html
 docs/manpage

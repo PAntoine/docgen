@@ -67,16 +67,16 @@ static unsigned int	g_max_call_depth	= 10;
 /*--------------------------------------------------------------------------------*
  * Linking Structures
  *--------------------------------------------------------------------------------*/
-GROUP 	g_group_tree = {{0x00},0,0,NULL,NULL,NULL,NULL};
-static SAMPLE		g_sample_list = {{0,0},{0,0},NULL};
-static FUNCTION		g_function_list = {0,0,{0x00},NULL,NULL};
-static APPLICATION	g_application_list = {{NULL,0,0},NULL,NULL,NULL,NULL,{{NULL,0,0},{NULL,0,0},NULL,NULL},0,0,NULL};
+GROUP 				g_group_tree;
+static SAMPLE		g_sample_list;
+static FUNCTION		g_function_list;
+static APPLICATION	g_application_list;
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * Name : test_walk_node_tree
  * Desc : This function will walk the tree as a test.
  *--------------------------------------------------------------------------------*/
-void	test_walk_node_tree(NODE* start)
+static void	test_walk_node_tree(NODE* start)
 {
 	NODE	walk_start;
 	NODE*	search_node;
@@ -107,7 +107,7 @@ void	test_walk_node_tree(NODE* start)
  * Name : find_trigger
  * Desc : This function will find the trigger in the given groups trigger list.
  *--------------------------------------------------------------------------------*/
-TRIGGER* find_trigger ( GROUP* group, unsigned char* name, unsigned int name_length )
+static TRIGGER* find_trigger ( GROUP* group, unsigned char* name, unsigned int name_length )
 {
 	TRIGGER*	result = NULL;
 	TRIGGER*	current_trigger = NULL;
@@ -142,7 +142,7 @@ TRIGGER* find_trigger ( GROUP* group, unsigned char* name, unsigned int name_len
  *        the find has been called or duplicate triggers will occur and the results
  *        will be unpredictable.
  *--------------------------------------------------------------------------------*/
-TRIGGER* add_trigger ( GROUP* group, unsigned char* name, unsigned int name_length, unsigned int flags )
+static TRIGGER* add_trigger ( GROUP* group, unsigned char* name, unsigned int name_length, unsigned int flags )
 {
 	TRIGGER*	result = NULL;
 	TRIGGER*	current_trigger = NULL;
@@ -191,7 +191,7 @@ TRIGGER* add_trigger ( GROUP* group, unsigned char* name, unsigned int name_leng
  *        a TRIGGERS_LIST item and find all the triggers that are defined in that
  *        list and add them.
  *--------------------------------------------------------------------------------*/
-void	add_triggers(TRIGGERS** triggers, BLOCK_NAME* triggers_list, GROUP* group)
+static void	add_triggers(TRIGGERS** triggers, BLOCK_NAME* triggers_list, GROUP* group)
 {
 	GROUP*		owing_group = NULL;
 	TRIGGER*	trigger = NULL;
@@ -246,7 +246,7 @@ void	add_triggers(TRIGGERS** triggers, BLOCK_NAME* triggers_list, GROUP* group)
  * Name : create_message
  * Desc : This function will add a message to the given timeline.
  *--------------------------------------------------------------------------------*/
-MESSAGE*	create_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
+static MESSAGE*	create_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
 {
 	MESSAGE* new_message = calloc(1,sizeof(MESSAGE));
 
@@ -269,7 +269,7 @@ MESSAGE*	create_message(NODE* sender, TIMELINE* destination, BLOCK_NAME* name)
  * Name : find_api_function
  * Desc : This function will find a named api function in the list of functions.
  *--------------------------------------------------------------------------------*/
-API_FUNCTION*	find_api_function(unsigned char* name, unsigned int name_length, GROUP* group)
+static API_FUNCTION*	find_api_function(unsigned char* name, unsigned int name_length, GROUP* group)
 {
 	API_FUNCTION* 	result = NULL;
 	API_FUNCTION*	current_func;
@@ -298,7 +298,7 @@ API_FUNCTION*	find_api_function(unsigned char* name, unsigned int name_length, G
  * Name : add_api_type_record
  * Desc : This function will add a type record to the api type.
  *--------------------------------------------------------------------------------*/
-void	add_api_type_record(API_TYPE* api_type, unsigned int record_type,NAME* name, NAME* type,  NAME* brief)
+static void	add_api_type_record(API_TYPE* api_type, unsigned int record_type,NAME* name, NAME* type,  NAME* brief)
 {
 	API_TYPE_RECORD*	new_record = malloc(sizeof(API_TYPE_RECORD));
 
@@ -325,7 +325,7 @@ void	add_api_type_record(API_TYPE* api_type, unsigned int record_type,NAME* name
  * Name : add_api_constant_record
  * Desc : This function will add a type record to the api type.
  *--------------------------------------------------------------------------------*/
-void	add_api_constant_record(API_CONSTANTS* api_constants, unsigned int record_type,NAME* type, NAME* name,  NAME* brief)
+static void	add_api_constant_record(API_CONSTANTS* api_constants, unsigned int record_type,NAME* type, NAME* name,  NAME* brief)
 {
 	API_CONSTANT*	new_constant = malloc(sizeof(API_CONSTANT));
 
@@ -352,7 +352,7 @@ void	add_api_constant_record(API_CONSTANTS* api_constants, unsigned int record_t
  * Name : add_api_constant
  * Desc : This function will add a constant to the api constants group list.
  *--------------------------------------------------------------------------------*/
-void	add_api_constant(API_CONSTANTS* api_constant, NAME* name, NAME* value)
+static void	add_api_constant(API_CONSTANTS* api_constant, NAME* name, NAME* value)
 {
 	API_CONSTANT*	new_record = malloc(sizeof(API_CONSTANT));
 
@@ -377,7 +377,7 @@ void	add_api_constant(API_CONSTANTS* api_constant, NAME* name, NAME* value)
  * Name : add_api_function
  * Desc : This function will add a named function in the list of functions.
  *--------------------------------------------------------------------------------*/
-API_FUNCTION*	add_api_function(unsigned char* name, unsigned int name_length, GROUP* group)
+static API_FUNCTION*	add_api_function(unsigned char* name, unsigned int name_length, GROUP* group)
 {
 	API_FUNCTION* 	result = calloc(1,sizeof(API_FUNCTION));
 	API_FUNCTION*	current_func;
@@ -419,7 +419,7 @@ API_FUNCTION*	add_api_function(unsigned char* name, unsigned int name_length, GR
  * Name : find_function
  * Desc : This function will find a named function in the list of functions.
  *--------------------------------------------------------------------------------*/
-FUNCTION*	find_function(unsigned char* name, unsigned int name_length)
+static FUNCTION*	find_function(unsigned char* name, unsigned int name_length)
 {
 	FUNCTION* result = &g_function_list;
 
@@ -441,7 +441,7 @@ FUNCTION*	find_function(unsigned char* name, unsigned int name_length)
  * Desc : This function will find or add an application from the list of
  *        applications.
  *--------------------------------------------------------------------------------*/
-APPLICATION*	find_add_application(unsigned char* name, unsigned int name_length)
+static APPLICATION*	find_add_application(unsigned char* name, unsigned int name_length)
 {
 	APPLICATION* 	result = NULL;
 	APPLICATION*	current_appl;
@@ -481,7 +481,7 @@ APPLICATION*	find_add_application(unsigned char* name, unsigned int name_length)
  * Name : handle_trigger
  * Desc : This function will handle the adding of the trigger to the node.
  *--------------------------------------------------------------------------------*/
-TRIGGER*	handle_trigger(BLOCK_NAME* trigger, GROUP* group)
+static TRIGGER*	handle_trigger(BLOCK_NAME* trigger, GROUP* group)
 {
 	TRIGGER* result = NULL;
 
@@ -503,7 +503,7 @@ TRIGGER*	handle_trigger(BLOCK_NAME* trigger, GROUP* group)
  * Name : add_function
  * Desc : This function will add a named function in the list of functions.
  *--------------------------------------------------------------------------------*/
-FUNCTION*	add_function(unsigned char* name, unsigned int name_length, unsigned int flags)
+static FUNCTION*	add_function(unsigned char* name, unsigned int name_length, unsigned int flags)
 {
 	FUNCTION* result = calloc(1,sizeof(FUNCTION));
 	FUNCTION* current_func = &g_function_list;
@@ -531,7 +531,7 @@ FUNCTION*	add_function(unsigned char* name, unsigned int name_length, unsigned i
  * Name : add_sample
  * Desc : This function will add a named sample in the list of samples.
  *--------------------------------------------------------------------------------*/
-void	add_sample(unsigned char* data, unsigned int data_length)
+static void	add_sample(unsigned char* data, unsigned int data_length)
 {
 	SAMPLE* result = calloc(1,sizeof(SAMPLE));
 	unsigned int	name_length;
@@ -558,7 +558,7 @@ void	add_sample(unsigned char* data, unsigned int data_length)
  * Name : add_block_node
  * Desc : This function will add a sequence diagram block to the diagram tree.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_node(BLOCK_NODE* block, GROUP** local_group_list)
+static unsigned int	add_block_node(BLOCK_NODE* block, GROUP** local_group_list)
 {
 	NODE*			after;
 	NODE*			sequence;
@@ -655,7 +655,7 @@ unsigned int	add_block_node(BLOCK_NODE* block, GROUP** local_group_list)
  * Name : add_block_type
  * Desc : This function will add a type block to the diagram tree.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_type(BLOCK_NODE* block, GROUP** local_group_list)
+static unsigned int	add_block_type(BLOCK_NODE* block, GROUP** local_group_list)
 {
 	GROUP*			owing_group = NULL;
 	API_TYPE*		current_type;
@@ -712,7 +712,7 @@ unsigned int	add_block_type(BLOCK_NODE* block, GROUP** local_group_list)
  * Name : add_block_constants
  * Desc : This function will add a constants block to the diagram tree.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_constants(BLOCK_NODE* block, GROUP** local_group_list)
+static unsigned int	add_block_constants(BLOCK_NODE* block, GROUP** local_group_list)
 {
 	GROUP*			owing_group = NULL;
 	API_CONSTANTS*	current_constants;
@@ -769,7 +769,7 @@ unsigned int	add_block_constants(BLOCK_NODE* block, GROUP** local_group_list)
  * Name : add_block_function
  * Desc : This function will add a function block.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_function(BLOCK_NODE* block, FUNCTION** local_function_list)
+static unsigned int	add_block_function(BLOCK_NODE* block, FUNCTION** local_function_list)
 {
 	unsigned int		result = EC_OK;
 	unsigned int		function_id = 0;
@@ -867,7 +867,7 @@ unsigned int	add_block_function(BLOCK_NODE* block, FUNCTION** local_function_lis
  * Desc : This will add the block for the file. It's major function is to set the
  *        defaults that are require while processing this file.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_file(BLOCK_NODE* block, GROUP** local_group_list)
+static unsigned int	add_block_file(BLOCK_NODE* block, GROUP** local_group_list)
 {
 	unsigned int result = EC_OK;
 
@@ -885,7 +885,7 @@ unsigned int	add_block_file(BLOCK_NODE* block, GROUP** local_group_list)
  * Name : add_block_application
  * Desc : This will add the block for the application.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_application(BLOCK_NODE* block, GROUP** local_group_list, APPLICATION** local_application_list)
+static unsigned int	add_block_application(BLOCK_NODE* block, GROUP** local_group_list, APPLICATION** local_application_list)
 {
 	unsigned int 	result = EC_OK;
 	OPTION*			current_option = NULL;
@@ -978,7 +978,7 @@ unsigned int	add_block_application(BLOCK_NODE* block, GROUP** local_group_list, 
  * Desc : This will add the block for the api. This can add fields to the parts
  *        of the API.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_api(BLOCK_NODE* block, GROUP** local_group_list)
+static unsigned int	add_block_api(BLOCK_NODE* block, GROUP** local_group_list)
 {
 	unsigned int		result = EC_OK;
 	API_RETURNS*		current_return;
@@ -1099,7 +1099,7 @@ unsigned int	add_block_api(BLOCK_NODE* block, GROUP** local_group_list)
  * Name : add_block_state
  * Desc : This function will add a state block to the diagram tree.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_block_state(BLOCK_NODE* block, GROUP** local_group_list)
+static unsigned int	add_block_state(BLOCK_NODE* block, GROUP** local_group_list)
 {
 	STATE*				to_state = NULL;
 	GROUP*				owing_group = NULL;
@@ -1184,7 +1184,7 @@ unsigned int	add_block_state(BLOCK_NODE* block, GROUP** local_group_list)
  * Name : add_block
  * Desc : This function will add a block to the diagram tree.
  *--------------------------------------------------------------------------------*/
-unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** local_function_list, APPLICATION** local_application_list )
+static unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** local_function_list, APPLICATION** local_application_list )
 {
 	STATE*				to_state = NULL;
 	GROUP*				owing_group = NULL;
@@ -1253,13 +1253,13 @@ unsigned int add_block(BLOCK_NODE* block, GROUP** local_group_list, FUNCTION** l
  * Name : add_numeric_to_block
  * Desc : This function will add the numeric atom to the block.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_numeric_to_block (	GROUP**			local_group_list,
- 										FUNCTION**		local_function_list,
-										API_FUNCTION**	local_api_function_list,
-										BLOCK_NODE*		node,
-										unsigned char*	record,
-										unsigned char*	payload,
-										unsigned int	payload_length )
+static unsigned int	add_numeric_to_block (	GROUP**			local_group_list,
+											FUNCTION**		local_function_list,
+											API_FUNCTION**	local_api_function_list,
+											BLOCK_NODE*		node,
+											unsigned char*	record,
+											unsigned char*	payload,
+											unsigned int	payload_length )
 {
 	unsigned int	result = EC_OK;
 	unsigned int	line_number = line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
@@ -1309,7 +1309,7 @@ unsigned int	add_numeric_to_block (	GROUP**			local_group_list,
  * Name : add_to_pair_list
  * Desc : This function will add a pair to the pair list.
  *--------------------------------------------------------------------------------*/
-void	add_to_pair_list(NAME_PAIRS_LIST* list, NAME* name, NAME* string)
+static void	add_to_pair_list(NAME_PAIRS_LIST* list, NAME* name, NAME* string)
 {
 	NAME_PAIRS_LIST*	current_item;
 
@@ -1341,14 +1341,14 @@ void	add_to_pair_list(NAME_PAIRS_LIST* list, NAME* name, NAME* string)
  * Name : add_pair_to_block
  * Desc : This function will add the numeric atom to the block.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_pair_to_block (	GROUP**			local_group_list,
- 									FUNCTION**		local_function_list,
-									APPLICATION**	local_application_list,
-									API_FUNCTION**	local_api_function_list,
-									BLOCK_NODE*		node,
-									unsigned char*	record,
-									unsigned char*	payload,
-									unsigned int	payload_length )
+static unsigned int	add_pair_to_block (	GROUP**			local_group_list,
+										FUNCTION**		local_function_list,
+										APPLICATION**	local_application_list,
+										API_FUNCTION**	local_api_function_list,
+										BLOCK_NODE*		node,
+										unsigned char*	record,
+										unsigned char*	payload,
+										unsigned int	payload_length )
 {
 	unsigned int	result = EC_OK;
 	unsigned int	line_number = line_number = ((((unsigned int)record[RECORD_LINE_NUM]) << 8) | record[RECORD_LINE_NUM+1]);
@@ -1429,7 +1429,7 @@ unsigned int	add_pair_to_block (	GROUP**			local_group_list,
  * Name : add_atom_to_constant
  * Desc : This function will add the atom to the block. 
   *--------------------------------------------------------------------------------*/
-unsigned int	add_atom_to_constant(	GROUP** 		local_group_list,
+static unsigned int	add_atom_to_constant(	GROUP** 		local_group_list,
 										FUNCTION**		local_function_list,
 										API_FUNCTION**	local_api_function_list,
 										BLOCK_NODE*		node,
@@ -1509,7 +1509,7 @@ unsigned int	add_atom_to_constant(	GROUP** 		local_group_list,
  * @name: new_section
  * @desc: This function will add a section to application.
  *--------------------------------------------------------------------------------*/
-unsigned int	new_section(APPLICATION* application, unsigned char* name, unsigned int name_length, unsigned int fixed)
+static unsigned int	new_section(APPLICATION* application, unsigned char* name, unsigned int name_length, unsigned int fixed)
 {
 	unsigned int	result = 0;
 	SECTION*		new_section = calloc(1,sizeof(SECTION));
@@ -1546,7 +1546,7 @@ unsigned int	new_section(APPLICATION* application, unsigned char* name, unsigned
  *
  * TODO: make this concatenate strings - this also is probably a leak source
  *--------------------------------------------------------------------------------*/
-unsigned int	extend_section(APPLICATION* application, unsigned char* name, unsigned int name_length, unsigned int fixed)
+static unsigned int	extend_section(APPLICATION* application, unsigned char* name, unsigned int name_length, unsigned int fixed)
 {
 	unsigned int	result = 0;
 	unsigned char*	temp;
@@ -1581,7 +1581,7 @@ unsigned int	extend_section(APPLICATION* application, unsigned char* name, unsig
  * Name : add_atom_to_type
  * Desc : This function will add the atom to the block. 
   *--------------------------------------------------------------------------------*/
-unsigned int	add_atom_to_type(	GROUP** 		local_group_list,
+static unsigned int	add_atom_to_type(	GROUP** 		local_group_list,
 									FUNCTION**		local_function_list,
 									API_FUNCTION**	local_api_function_list,
 									BLOCK_NODE*		node,
@@ -1656,7 +1656,7 @@ unsigned int	add_atom_to_type(	GROUP** 		local_group_list,
  * TODO: fix this code it knows the record format, and it should not. Means that
  *       too many functions have to be changed when the format changes.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
+static unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
 									FUNCTION**		local_function_list,
 									APPLICATION**	local_application_list,
 									API_FUNCTION**	local_api_function_list,
@@ -2079,7 +2079,7 @@ unsigned int	add_atom_to_block ( GROUP** 		local_group_list,
  * Desc : This function will decode the record and add it to the current api
  *        function.
  *--------------------------------------------------------------------------------*/
-unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, NAME* type, NAME* name, NAME* brief)
+static unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, NAME* type, NAME* name, NAME* brief)
 {
 	unsigned int	result = 0;
 
@@ -2120,7 +2120,7 @@ unsigned int	decode_api_function_type(API_FUNCTION* function, ATOM_ATOMS atom, N
  * Name : decode_type
  * Desc : This function will decode the type record.
  *--------------------------------------------------------------------------------*/
-unsigned int	decode_type(unsigned char* record, unsigned int record_length, NAME* type, NAME* name, NAME* brief)
+static unsigned int	decode_type(unsigned char* record, unsigned int record_length, NAME* type, NAME* name, NAME* brief)
 {
 	unsigned int 	pos = 0;
 	unsigned int 	result = 0;
@@ -2173,7 +2173,7 @@ unsigned int	decode_type(unsigned char* record, unsigned int record_length, NAME
  * Desc : This function will create a new constant and add it to the end of the
  *        current constant list.
  *--------------------------------------------------------------------------------*/
-void	new_constant(API_CONSTANTS* constants)
+static void	new_constant(API_CONSTANTS* constants)
 {
 	API_CONSTANT*	result = calloc(1,sizeof(API_CONSTANT));
 
@@ -2197,11 +2197,12 @@ void	new_constant(API_CONSTANTS* constants)
  *        atoms. It will also handle the first parse on the building of the 
  *        connections.
  *--------------------------------------------------------------------------------*/
-unsigned int	process_input(const char* filename)
+static unsigned int	process_input(const char* filename)
 {
 	int				infile;
 	int				bytes_read;
 	unsigned int 	result = 0;
+	unsigned int	special_group;
 	unsigned int	in_api_group = 0;
 	unsigned int	line_number = 0;
 	unsigned int	num_groups = 1;
@@ -2398,8 +2399,14 @@ unsigned int	process_input(const char* filename)
 								/* does not have a name then it should map to the default */
 								if (record_size > 0)
 								{
-									if ((local_group[num_groups] = find_group(&g_group_tree,record_buffer,record_size)) == NULL)
+									if ((local_group[num_groups] = find_group(&g_group_tree,record_buffer,record_size,&special_group)) == NULL)
 									{
+										if (special_group != NORMAL_GROUP)
+										{
+											result = EC_SPECIFIED_SPECIAL_GROUP_IN_MODEL;
+											raise_warning(line_number,result,NULL,NULL);
+										}
+
 										local_group[num_groups] = add_group(&g_group_tree,record_buffer,record_size);
 									}
 
@@ -2547,7 +2554,7 @@ unsigned int	process_input(const char* filename)
  * Name : check_state_machine
  * Desc : This function will check to see if the state machine is valid.
  *--------------------------------------------------------------------------------*/
-unsigned int	check_state_machine(STATE_MACHINE* state_machine)
+static unsigned int	check_state_machine(STATE_MACHINE* state_machine)
 {
 	unsigned int		result = EC_OK;
 	STATE*				current_state = NULL;
@@ -2589,7 +2596,7 @@ unsigned int	check_state_machine(STATE_MACHINE* state_machine)
  * Desc : This function handles the reordering of the node. If the node is either
  *        part of a function or has a sub-wait these are moved to.
  *--------------------------------------------------------------------------------*/
-NODE*	handle_reorder(NODE* search_node, NODE* psearch_node, NODE* previous_node, TIMELINE* timeline)
+static NODE*	handle_reorder(NODE* search_node, NODE* psearch_node, NODE* previous_node, TIMELINE* timeline)
 {
 	search_node->flags |= FLAG_DEPENDENCY;
 
@@ -2638,7 +2645,7 @@ NODE*	handle_reorder(NODE* search_node, NODE* psearch_node, NODE* previous_node,
  * Name : reorder_nodes
  * Desc : This function will reorder the nodes in the specific timeline.
  *--------------------------------------------------------------------------------*/
-ERROR_CODES	reorder_nodes(TIMELINE* timeline)
+static ERROR_CODES	reorder_nodes(TIMELINE* timeline)
 {
 	int			found = 0;
 	NODE*		temp_node;
@@ -2721,7 +2728,7 @@ ERROR_CODES	reorder_nodes(TIMELINE* timeline)
  *        The depth parameter is used to depth check the call list to stop 
  *        recursive call breaking it.
  *--------------------------------------------------------------------------------*/
-unsigned int	insert_function(TIMELINE* timeline, NODE** start, FUNCTION* function, unsigned int depth)
+static unsigned int	insert_function(TIMELINE* timeline, NODE** start, FUNCTION* function, unsigned int depth)
 {
 	NODE*			current_node = *start;
 	NODE*			new_node = *start;
@@ -2848,7 +2855,7 @@ unsigned int	insert_function(TIMELINE* timeline, NODE** start, FUNCTION* functio
  *        will search the list of nodes to find out where the after message is
  *        sent or waited for and place the node there.
  *--------------------------------------------------------------------------------*/
-ERROR_CODES	node_reorder(SEQUENCE_DIAGRAM* sequence_diagram)
+static ERROR_CODES	node_reorder(SEQUENCE_DIAGRAM* sequence_diagram)
 {
 	NODE*			current_node;
 	TIMELINE*		current_timeline;
@@ -2879,7 +2886,7 @@ ERROR_CODES	node_reorder(SEQUENCE_DIAGRAM* sequence_diagram)
  *        just add the functions and all the atoms that are associated with the
  *        function into the tree at the current location.
  *--------------------------------------------------------------------------------*/
-unsigned int	function_fixup(SEQUENCE_DIAGRAM* sequence_diagram)
+static unsigned int	function_fixup(SEQUENCE_DIAGRAM* sequence_diagram)
 {
 	NODE*			current_node;
 	TIMELINE*		current_timeline;
@@ -2928,7 +2935,7 @@ unsigned int	function_fixup(SEQUENCE_DIAGRAM* sequence_diagram)
  * Desc : This function this will copy a node and add it to the list of nodes
  *        that have been copied.
  *--------------------------------------------------------------------------------*/
-NODE*	copy_node(NODE* node, NODE_LIST* list)
+static NODE*	copy_node(NODE* node, NODE_LIST* list)
 {
 	NODE*		result;
 	NODE_LIST*	list_end = list;
@@ -2972,7 +2979,7 @@ NODE*	copy_node(NODE* node, NODE_LIST* list)
  *        This function will also tidy up the function pointers for the copied
  *        nodes.
  *--------------------------------------------------------------------------------*/
-void	merge_nodes(NODE_LIST* list, NODE* insert_node)
+static void	merge_nodes(NODE_LIST* list, NODE* insert_node)
 {
 	NODE*		end_node;
 	NODE*		start_node;
@@ -3026,7 +3033,7 @@ void	merge_nodes(NODE_LIST* list, NODE* insert_node)
  *        messages that the node has. It will add the duplicate nodes to the end 
  *        of the timelines that they belong in.
  *--------------------------------------------------------------------------------*/
-NODE*	duplicate_function(NODE* start_node)
+static NODE*	duplicate_function(NODE* start_node)
 {
 	NODE* 		result = start_node;
 	NODE* 		copy;
@@ -3034,7 +3041,7 @@ NODE*	duplicate_function(NODE* start_node)
 	NODE* 		stop_node = start_node->function_end;
 	NODE* 		active_node = start_node;
 	MESSAGE*	new_message;
-	NODE_LIST	insert_list = {NULL,NULL,NULL};
+	NODE_LIST	insert_list = {NULL,NULL,NULL,NULL};
 
 	start_node->return_node = NULL;
 	
@@ -3073,7 +3080,7 @@ NODE*	duplicate_function(NODE* start_node)
  * Desc : This function will find the waiting message that matches the send in
  *        the given node. It will return the node that it finds.
  *--------------------------------------------------------------------------------*/
-NODE*	find_wait_node(MESSAGE* search_message, MESSAGE* sent_message)
+static NODE*	find_wait_node(MESSAGE* search_message, MESSAGE* sent_message)
 {
 	NODE*			result = NULL;
 	NODE*			temp_node;
@@ -3127,7 +3134,7 @@ NODE*	find_wait_node(MESSAGE* search_message, MESSAGE* sent_message)
  *        the given node. It will then attach the waiting message to sending 
  *        message.
  *--------------------------------------------------------------------------------*/
-unsigned int	find_wait(TIMELINE* search_timeline, TIMELINE* timeline, NODE** sending_node, unsigned int broadcast)
+static unsigned int	find_wait(TIMELINE* search_timeline, TIMELINE* timeline, NODE** sending_node, unsigned int broadcast)
 {
 	NODE*			temp_node;
 	NODE*			current_node;
@@ -3233,7 +3240,7 @@ unsigned int	find_wait(TIMELINE* search_timeline, TIMELINE* timeline, NODE** sen
  *        This also as a side effect (to save a couple of cycles) also sets the
  *        function end message to the same one as the function start.
  *--------------------------------------------------------------------------------*/
-unsigned int	connect_responses(SEQUENCE_DIAGRAM* sequence_diagram)
+static unsigned int	connect_responses(SEQUENCE_DIAGRAM* sequence_diagram)
 {
 	NODE*			target_node;
 	NODE*			current_node;
@@ -3330,7 +3337,7 @@ unsigned int	connect_responses(SEQUENCE_DIAGRAM* sequence_diagram)
  *        SIDE-EFFECT WARNING: this code also flags any broadcast message as a 
  *        broadcast. Done here to safe some cycles.
  *--------------------------------------------------------------------------------*/
-unsigned int	connect_sequence(SEQUENCE_DIAGRAM* sequence_diagram)
+static unsigned int	connect_sequence(SEQUENCE_DIAGRAM* sequence_diagram)
 {
 	NODE*			current_node;
 	TIMELINE*		broadcast;
@@ -3400,7 +3407,7 @@ unsigned int	connect_sequence(SEQUENCE_DIAGRAM* sequence_diagram)
  * Desc : This function will check that the files input are sensible and all the
  *        nodes that have to be defined are properly defined.
  *--------------------------------------------------------------------------------*/
-unsigned int semantic_check ( void )
+static unsigned int semantic_check ( void )
 {
 	GROUP*				current = &g_group_tree;
 	TRIGGER*			current_trigger = NULL;
@@ -3459,7 +3466,7 @@ unsigned int semantic_check ( void )
  * Desc : This function will open the output file and initialise the output
  *        structure for the file.
  *--------------------------------------------------------------------------------*/
-int	open_file(OUTPUT_FILE* file, char* file_name)
+static int	open_file(OUTPUT_FILE* file, char* file_name)
 {
 	int result = 0;
 
@@ -3479,7 +3486,7 @@ int	open_file(OUTPUT_FILE* file, char* file_name)
  * Desc : This function will write the specific record to the file. It will handle
  *        the block structure and padding.
  *--------------------------------------------------------------------------------*/
-void	write_to_file(OUTPUT_FILE* file)
+static void	write_to_file(OUTPUT_FILE* file)
 {
 	unsigned int count = 0;
 
@@ -3514,7 +3521,7 @@ void	write_to_file(OUTPUT_FILE* file)
  * Desc : This function will close the output file and flush the last write
  *        block to the file.
  *--------------------------------------------------------------------------------*/
-void	close_file(OUTPUT_FILE* file)
+static void	close_file(OUTPUT_FILE* file)
 {
 	if (file->offset > 0)
 	{
@@ -3532,7 +3539,7 @@ void	close_file(OUTPUT_FILE* file)
  * Name : write_empty_record
  * Desc : This function writes empty record to the file.
  *--------------------------------------------------------------------------------*/
-void	write_empty_record(unsigned char type, OUTPUT_FILE* file)
+static void	write_empty_record(unsigned char type, OUTPUT_FILE* file)
 {
 	unsigned char	buffer[1];
 
@@ -3550,7 +3557,7 @@ void	write_empty_record(unsigned char type, OUTPUT_FILE* file)
  * Name : write_numerics_record
  * Desc : This function writes a short and a int to the file.
  *--------------------------------------------------------------------------------*/
-void	write_numerics_record(unsigned char type, OUTPUT_FILE* file, unsigned short param1, unsigned int param2)
+static void	write_numerics_record(unsigned char type, OUTPUT_FILE* file, unsigned short param1, unsigned int param2)
 {
 	unsigned char	buffer[7];
 
@@ -3575,7 +3582,7 @@ void	write_numerics_record(unsigned char type, OUTPUT_FILE* file, unsigned short
  * Name : write_numeric_record
  * Desc : This function writes a short to the file.
  *--------------------------------------------------------------------------------*/
-void	write_numeric_record(unsigned char type, OUTPUT_FILE* file, unsigned short param)
+static void	write_numeric_record(unsigned char type, OUTPUT_FILE* file, unsigned short param)
 {
 	unsigned char	buffer[3];
 
@@ -3595,7 +3602,7 @@ void	write_numeric_record(unsigned char type, OUTPUT_FILE* file, unsigned short 
  * Name : write_string_param_record
  * Desc : This function writes a string record to the file. With a parameter.
  *--------------------------------------------------------------------------------*/
-void	write_string_param_record(unsigned char type, OUTPUT_FILE* file,unsigned char* string,unsigned short string_length, unsigned short param)
+static void	write_string_param_record(unsigned char type, OUTPUT_FILE* file,unsigned char* string,unsigned short string_length, unsigned short param)
 {
 	unsigned char	buffer[4];
 
@@ -3618,7 +3625,7 @@ void	write_string_param_record(unsigned char type, OUTPUT_FILE* file,unsigned ch
  * Name : write_string_record
  * Desc : This function writes a string record to the file.
  *--------------------------------------------------------------------------------*/
-void	write_string_record(unsigned char type, OUTPUT_FILE* file, NAME* string)
+static void	write_string_record(unsigned char type, OUTPUT_FILE* file, NAME* string)
 {
 	unsigned char	buffer[4];
 
@@ -3641,7 +3648,7 @@ void	write_string_record(unsigned char type, OUTPUT_FILE* file, NAME* string)
  * Name : write_group_id_record
  * Desc : This function writes a group record with an id attached..
  *--------------------------------------------------------------------------------*/
-void	write_group_id_record(	unsigned char	type, 
+static void	write_group_id_record(	unsigned char	type, 
 								OUTPUT_FILE*	file, 
 								GROUP*			group, 
 								unsigned char*	string,
@@ -3674,7 +3681,7 @@ void	write_group_id_record(	unsigned char	type,
  * Name : write_option_record
  * Desc : This function writes a group option record.
  *--------------------------------------------------------------------------------*/
-void	write_option_record( unsigned char type, OUTPUT_FILE* file, OPTION* option)
+static void	write_option_record( unsigned char type, OUTPUT_FILE* file, OPTION* option)
 {
 	unsigned char	fixed = 0;
 	unsigned char	buffer[10];
@@ -3723,7 +3730,7 @@ void	write_option_record( unsigned char type, OUTPUT_FILE* file, OPTION* option)
  * @name: write_synopsis_record
  * @desc: This function will write te synopsis record to the output file.
  *--------------------------------------------------------------------------------*/
-void	write_synopsis_record(unsigned char type, OUTPUT_FILE* file, NAME* name, unsigned char* synopsis_index, unsigned int index_size)
+static void	write_synopsis_record(unsigned char type, OUTPUT_FILE* file, NAME* name, unsigned char* synopsis_index, unsigned int index_size)
 {
 	unsigned char	buffer[5];
 
@@ -3749,7 +3756,7 @@ void	write_synopsis_record(unsigned char type, OUTPUT_FILE* file, NAME* name, un
  * Name : write_group_record
  * Desc : This function writes a group record.
  *--------------------------------------------------------------------------------*/
-void	write_group_record(unsigned char type, OUTPUT_FILE* file, GROUP* group, unsigned char* string, unsigned short string_length)
+static void	write_group_record(unsigned char type, OUTPUT_FILE* file, GROUP* group, unsigned char* string, unsigned short string_length)
 {
 	unsigned char	buffer[3];
 
@@ -3775,7 +3782,7 @@ void	write_group_record(unsigned char type, OUTPUT_FILE* file, GROUP* group, uns
  * Name : write_message_record
  * Desc : This function writes a message record.
  *--------------------------------------------------------------------------------*/
-void	write_message_record(	unsigned char	type,
+static void	write_message_record(	unsigned char	type,
 								OUTPUT_FILE*	file,
 								NODE*			current_node,
 								NODE*			other_node,
@@ -3831,7 +3838,7 @@ void	write_message_record(	unsigned char	type,
  * Name : write_type_record
  * Desc : This function writes a api type record to the file.
  *--------------------------------------------------------------------------------*/
-void	write_type_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, NAME* name, NAME* brief)
+static void	write_type_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, NAME* name, NAME* brief)
 {
 	unsigned char	buffer[6];
 
@@ -3860,7 +3867,7 @@ void	write_type_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, N
  * Name : write_constant_record
  * Desc : This function writes a api constant record to the file.
  *--------------------------------------------------------------------------------*/
-void	write_constant_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, NAME* name, NAME* value, NAME* brief)
+static void	write_constant_record(unsigned char type, OUTPUT_FILE* file, NAME* type_type, NAME* name, NAME* value, NAME* brief)
 {
 	unsigned char	buffer[8];
 
@@ -3893,7 +3900,7 @@ void	write_constant_record(unsigned char type, OUTPUT_FILE* file, NAME* type_typ
  * Name : write_pair_record
  * Desc : This function writes a api pair record to the file.
  *--------------------------------------------------------------------------------*/
-void	write_pair_record(unsigned char type, OUTPUT_FILE* file, NAME* value, NAME* string)
+static void	write_pair_record(unsigned char type, OUTPUT_FILE* file, NAME* value, NAME* string)
 {
 	unsigned char	buffer[5];
 
@@ -3919,9 +3926,9 @@ void	write_pair_record(unsigned char type, OUTPUT_FILE* file, NAME* value, NAME*
  * Name : output_api
  * Desc : This function will output the api to the open file.
  *--------------------------------------------------------------------------------*/
-void	output_api(OUTPUT_FILE* outfile, API* api)
+static void	output_api(OUTPUT_FILE* outfile, API* api)
 {
-	NAME				empty = {NULL,0};
+	NAME				empty = {NULL,0,0,0};
 	NAME				group_name;
 	API_TYPE*			current_type;
 	API_RETURNS*		current_returns;
@@ -4030,7 +4037,7 @@ void	output_api(OUTPUT_FILE* outfile, API* api)
  * Name : output_state_machine
  * Desc : This function will output the state machine to the open file.
  *--------------------------------------------------------------------------------*/
-void	output_state_machine(OUTPUT_FILE* outfile,STATE_MACHINE* state_machine)
+static void	output_state_machine(OUTPUT_FILE* outfile,STATE_MACHINE* state_machine)
 {
 	unsigned int		node_id = 0;
 	NAME				temp_name;
@@ -4114,7 +4121,7 @@ void	output_state_machine(OUTPUT_FILE* outfile,STATE_MACHINE* state_machine)
  * Name : output_sequence_diagram
  * Desc : This function will output the sequence diagram.
  *--------------------------------------------------------------------------------*/
-void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_diagram)
+static void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_diagram)
 {
 	NAME		group_name;
 	NODE*		current_node;
@@ -4197,7 +4204,7 @@ void	output_sequence_diagram(OUTPUT_FILE* outfile, SEQUENCE_DIAGRAM* sequence_di
  * Desc : This function will output all the samples collected to the output
  *        file.
  *--------------------------------------------------------------------------------*/
-void	output_samples(OUTPUT_FILE* outfile, SAMPLE* list)
+static void	output_samples(OUTPUT_FILE* outfile, SAMPLE* list)
 {
 	SAMPLE*	current_sample = list;
 
@@ -4219,7 +4226,7 @@ void	output_samples(OUTPUT_FILE* outfile, SAMPLE* list)
  *        the synopsis in the numeric order that they appear in the applications
  *        list.
  *--------------------------------------------------------------------------------*/
-void	output_synopsis(OUTPUT_FILE* outfile, SYNOPSIS_LIST* synopsys, OPTION* option_list)
+static void	output_synopsis(OUTPUT_FILE* outfile, SYNOPSIS_LIST* synopsys, OPTION* option_list)
 {
 	unsigned int	end;
 	unsigned int	start;
@@ -4296,7 +4303,7 @@ void	output_synopsis(OUTPUT_FILE* outfile, SYNOPSIS_LIST* synopsys, OPTION* opti
  * Desc : This function will output all the applications collected to the output
  *        file.
  *--------------------------------------------------------------------------------*/
-void	output_applications(OUTPUT_FILE* outfile, APPLICATION* list)
+static void	output_applications(OUTPUT_FILE* outfile, APPLICATION* list)
 {
 	OPTION*			option;
 	SECTION*		section;
@@ -4376,7 +4383,7 @@ void	output_applications(OUTPUT_FILE* outfile, APPLICATION* list)
  * Name : produce_output
  * Desc : This function will output the resulting linked object file.
  *--------------------------------------------------------------------------------*/
-unsigned int	produce_output(char* output_name)
+static unsigned int	produce_output(char* output_name)
 {
 	time_t			now = time(NULL);
 	struct tm*		curr_time = gmtime(&now);
@@ -4461,6 +4468,12 @@ int main(int argc, const char *argv[])
 	unsigned char*	param_mask;
 
 	param_mask = calloc(argc,1);
+
+	/* initialise some things */
+	memset(&g_group_tree,0,sizeof(GROUP));
+	memset(&g_sample_list,0,sizeof(SAMPLE));
+	memset(&g_function_list,0,sizeof(FUNCTION));
+	memset(&g_application_list,0,sizeof(APPLICATION));
 
 	if (argc < 2)
 	{

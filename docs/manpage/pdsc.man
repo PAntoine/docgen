@@ -1,0 +1,120 @@
+
+.TH pdsc 1
+.LP
+
+.LP
+
+.B Name
+.I pdsc
+.LP
+.B Synopsis
+.LP
+.B pdsc
+.
+[
+.B -v
+.
+] 
+[
+.B -q
+.
+] 
+.B -o
+.
+<output file name> 
+.B -D
+.
+MACRO_NAME=MACRO_VALUE 
+\&... 
+.B input_file
+.
+.LP
+.LP
+.B Options
+.LP
+.TS
+left,tab(#);
+lb  lb.
+T{
+-v
+T}#T{
+
+T}
+#T{
+This produces extra output information during the generation of the output. 
+T}
+T{
+-q
+T}#T{
+
+T}
+#T{
+quiet. This flag suppresses any non-error output from the application. 
+T}
+T{
+-o
+T}#T{
+<output file name>
+T}
+#T{
+This function defines the name of the output file produced by this application. If the name is not given then it will default to "doc.pdso". 
+T}
+T{
+-D
+T}#T{
+MACRO_NAME=MACRO_VALUE
+T}
+#T{
+The macro value is used to allow for strings passed into the build to be substituted within some of the symbol names. This allows for the same code and markup to be used within the same document without the name clashing. 
+T}
+T{
+-?
+T}#T{
+
+T}
+#T{
+This outputs the help message. 
+T}
+T{
+input_file
+T}#T{
+
+T}
+#T{
+The source code file to compile. 
+T}
+.TE
+
+.LP
+.PD 4 
+
+.B Description
+.RS
+Document Source Compiler This function will search the given source files to locate the special markup symbols that are specified within comment blocks. The symbols are specified  by special tokens that start with the 
+.B at
+.
+symbol. This file will generate a file that has all the data that has been collected from the source file. This object file generated should be linked together with the 
+.B pdsl
+.
+application and then documents can be generated from the system using the 
+.B pdp
+.
+application. The purpose of this system it to allow for generic documentation to be create from the build, and tailored to a specific build configuration.
+.RE
+
+.PD 4 
+
+.B Error Reporting
+.RS
+Please report any problems to https://github.com/PAntoine/docgen
+.RE
+
+.PD 4 
+
+.B Author 
+.RS
+Peter Antoine
+.RE
+
+.PD
+.LP

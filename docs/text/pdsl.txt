@@ -1,0 +1,37 @@
+
+
+Name    pdsl
+
+Synopsis
+*pdsl* [*-v*] [*-q*] *-o*<output file name> *input_files*... 
+
+
+Options
+    -v                                                                                                                   
+                 This produces extra output information during the generation of the output.                             
+    -q                                                                                                                   
+                 quiet. This flag suppresses any non-error output from the application.                                  
+    -o           <output file name>                                                                                      
+                 This function defines the name of the output file produced by this application. If the name is not  
+                 given then it will default to "doc.gout".                                                               
+    -?                                                                                                                   
+                 This outputs the help message.                                                                          
+    input_files                                                                                                          
+                 The object file(s) to link together.                                                                    
+
+Description
+    Document Source Linker This application will take all the specified input_files that have been generated from the
+    document compiler *pdsc* and link them together as a  single object file. This object will have all the components for
+    each of the compiled source files, it will link all objects that are either grouped together or reference each other
+    (i.e. state_machines or sequence_diagrams). It produces an output file that can be passed to the document processor
+    (*pdp*) that can be used as the model to be used to generate final documents.
+
+
+Error Reporting
+    Please report any problems to https://github.com/PAntoine/docgen
+
+
+Author 
+    Peter Antoine
+
+

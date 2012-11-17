@@ -16,6 +16,7 @@
 
 DEPENDENCES = common
 INCLUDE_DIRS += -I $(BUILD_ROOT)/common/include
+TARGET_DIR = $(PLUGINS_TARGET_DIR)
 
 #---------------------------------------------------------------------------------
 # The build includes

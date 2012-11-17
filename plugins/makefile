@@ -18,6 +18,7 @@ DOCS_PLUGINS  = $(addprefix docs_,$(PLUGINS))
 BUILD_PLUGINS = $(addprefix build_,$(PLUGINS))
 CLEAN_PLUGINS = $(addprefix clean_,$(PLUGINS))
 
+export PLUGINS_TARGET_DIR=$(BUILD_ROOT)/output/plugins
 
 #---------------------------------------------------------------------------------
 # build targets
@@ -33,9 +34,12 @@ docs:  $(DOCS_PLUGINS)
 $(DOCS_PLUGINS):
 	@$(MAKE) -s -C $(subst docs_,,$@) docs
 
-$(BUILD_PLUGINS):
+$(BUILD_PLUGINS): $(PLUGINS_TARGET_DIR) 
 	@$(MAKE) -s -C $(subst build_,,$@) build
 
 $(CLEAN_PLUGINS):
 	@$(MAKE) -s -C $(subst clean_,,$@) clean
+	@$(RMSUBDIR) $(TARGET_DIR)
 
+$(PLUGINS_TARGET_DIR):
+	@$(MKDIR) $(PLUGINS_TARGET_DIR)

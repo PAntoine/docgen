@@ -97,32 +97,12 @@ typedef struct
 /*--------------------------------------------------------------------------------*
  * Function prototypes for the global functions
  *--------------------------------------------------------------------------------*/
-void			output_initialise(char* search_path);
-unsigned int	output_open(DRAW_STATE* draw_state, char* file_name, unsigned char* path, unsigned int path_length);
-void			output_close(DRAW_STATE* draw_state);
+void			output_initialise(char* resource_path, int resource_path_length);
+unsigned int	output_open(DRAW_STATE* draw_state, INPUT_STATE* input_state, char* input_file_name, unsigned char* path, unsigned int path_length);
+unsigned int	output_parse_model(DRAW_STATE* draw_state, INPUT_STATE* input_state, GROUP* group_tree, NAME* model);
+void			output_document_index(DRAW_STATE* draw_state, INPUT_STATE* input_state);
+void			output_close(DRAW_STATE* draw_state,INPUT_STATE* input_state);
 void			output_release(void);
-
-/*--------------------------------------------------------------------------------*
- * output flag functions.
- *--------------------------------------------------------------------------------*/
-
-void			output_init_flag_list(OUTPUT_FLAG_LIST* list);
-unsigned int	output_find_flag(OUTPUT_FLAG_LIST* list, unsigned int option_hash, NAME* value, OUTPUT_FLAG_VALUE* flag_value);
-void			output_parse_flags(INPUT_STATE* input_state, DRAW_STATE* draw_state);
-
-/*--------------------------------------------------------------------------------*
- * output functions.
- *--------------------------------------------------------------------------------*/
-
-void	output_function_prototype(DRAW_STATE* draw_state, API_FUNCTION* function);
-void	output_function_parameters(DRAW_STATE* draw_state, API_FUNCTION* function);
-void	output_function_returns(DRAW_STATE* draw_state, API_FUNCTION* function);
-void	output_type_records(DRAW_STATE* draw_state, API_TYPE* function);
-void	output_constant_records(DRAW_STATE* draw_state, API_CONSTANTS* constant);
-void	output_application_option(DRAW_STATE* draw_state, APPLICATION* application,unsigned int parts, NAME* part_name);
-void	output_application_command(DRAW_STATE* draw_state, APPLICATION* application,unsigned int parts, NAME* part_name);
-void	output_application_section(DRAW_STATE* draw_state, APPLICATION* application,unsigned int parts, NAME* part_name);
-void	output_application_synopsis(DRAW_STATE* draw_state, APPLICATION* application,unsigned int parts, NAME* part_name);
 
 #endif
 

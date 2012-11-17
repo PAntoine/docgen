@@ -16,18 +16,70 @@
 #include <string.h>
 #include <malloc.h>
 #include "output.h"
+#include "utilities.h"
+#include "level_index.h"
 #include "error_codes.h"
+#include "state_machine.h"
 #include "document_generator.h"
 #include "text_output_format.h"
 
 #define DEFAULT_PAGE_WIDTH		(120)
 #define DEFAULT_COLUMN_SPACING	(2)
 
+/*--------------------------------------------------------------------------------*
+ * static structures.
+ *--------------------------------------------------------------------------------*/
+static unsigned char	text_fmt[] = "text";
+
+OUTPUT_FORMAT	output_formats = 
+{
+	text_fmt,
+	sizeof(text_fmt)-1,
+	text_decode_flags,
+	text_open,
+	text_close,
+	text_output_header,
+	text_output_footer,
+	text_output_raw,
+	text_output_sample,
+	text_output_timelines,
+	text_output_message,
+	text_output_state_set_size,
+	text_output_state,
+	text_output_transition,
+	text_output_marker,
+	text_output_text,
+	text_output_section,
+	text_output_title,
+	text_output_block,
+	text_output_table_start,
+	text_output_table_header,
+	text_output_table_row,
+	text_output_table_end,
+	text_output_index_chapter,
+	text_output_index_start_sublevel,
+	text_output_index_entry,	
+	text_output_index_end_sublevel,
+	text_output_list_item_start,
+	text_output_list_numeric_start,
+	text_output_list_end,
+
+	NULL
+};
+
+/*--------------------------------------------------------------------------------*
+ * String Constants.
+ *--------------------------------------------------------------------------------*/
+static unsigned char	list_level_string[]	= "                                ";
+static unsigned char	chapter_string[]	= "Chapter";
+
+#define	CHAPTER_LENGTH	(sizeof(chapter_string)-1)
+
 /*----- FUNCTION -----------------------------------------------------------------*
  * @name: text_decode_flags
  * @desc: This function will decode the flags that are local to text functions.
  *--------------------------------------------------------------------------------*/
-unsigned int	text_decode_flags(INPUT_STATE* input_state, unsigned hash, NAME* value)
+unsigned int	text_decode_flags(DRAW_STATE* draw_state,INPUT_STATE* input_state, unsigned hash,NAME* value)
 {
 	unsigned int result = 0;
 
@@ -40,7 +92,7 @@ unsigned int	text_decode_flags(INPUT_STATE* input_state, unsigned hash, NAME* va
  * Name : text_open
  * Desc : This function will open the text file.
  *--------------------------------------------------------------------------------*/
-unsigned int	text_open(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length)
+unsigned int	text_open(DRAW_STATE* draw_state, INPUT_STATE* input_state, unsigned char* name, unsigned int name_length)
 {
 	unsigned int result = EC_FAILED;
 	unsigned int length = name_length + draw_state->path_length;
@@ -55,12 +107,13 @@ unsigned int	text_open(DRAW_STATE* draw_state, unsigned char* name, unsigned int
 		draw_state->path[length] = '\0';
 	
 		draw_state->page_width = DEFAULT_PAGE_WIDTH;
+		draw_state->margin_width = 4;
 		draw_state->global_margin_width = 4;
-		draw_state->global_format_flags = 0;
+		draw_state->global_max_constant = 50;
 
 		draw_state->output_buffer = malloc(draw_state->page_width + 1);
 		draw_state->output_buffer[draw_state->page_width] = '\n';
-
+	
 		if ((draw_state->output_file = open((char*)draw_state->path,O_CREAT | O_TRUNC | O_WRONLY, S_IWUSR | S_IRUSR)) != -1)
 		{
 			/* file successfully opened */
@@ -75,7 +128,7 @@ unsigned int	text_open(DRAW_STATE* draw_state, unsigned char* name, unsigned int
  * Name : text_close
  * Desc : This function will close the output file.
  *--------------------------------------------------------------------------------*/
-void	text_close(DRAW_STATE* draw_state)
+void	text_close(DRAW_STATE* draw_state,INPUT_STATE* input_state)
 {
 	if (draw_state->output_file != -1)
 	{
@@ -90,9 +143,26 @@ void	text_close(DRAW_STATE* draw_state)
  *--------------------------------------------------------------------------------*/
 void	text_output_header(DRAW_STATE* draw_state, INPUT_STATE* input_state)
 {
-	if ((draw_state->format_flags & OUTPUT_FORMAT_INLINE) == 0)
+	NAME	text = {NULL,0,0,0};
+
+	switch(input_state->state)
 	{
-		write(draw_state->output_file,"\n",1);
+		case TYPE_STATE_MACHINE:
+			state_machine_allocate((TEXT_STATE_MACHINE**)&draw_state->data.state_machine.data);
+			break;
+
+		case TYPE_QUOTE_BLOCK: 
+			break;
+
+		case TYPE_LIST:
+			level_index_init(&draw_state->list_index);
+			break;
+
+		default:
+			if ((draw_state->format_flags & OUTPUT_FORMAT_INLINE) == 0)
+			{
+				write(draw_state->output_file,"\n",1);
+			}
 	}
 }
 
@@ -102,10 +172,30 @@ void	text_output_header(DRAW_STATE* draw_state, INPUT_STATE* input_state)
  *--------------------------------------------------------------------------------*/
 void	text_output_footer(DRAW_STATE* draw_state, INPUT_STATE* input_state)
 {
+	NAME	text = {NULL,0,0,0};
+
+	if (input_state->state == TYPE_STATE_MACHINE)
+	{
+		if (draw_state->data.state_machine.data != NULL)
+		{
+			state_machine_draw(draw_state->data.state_machine.data,draw_state);
+			state_machine_release(draw_state->data.state_machine.data);
+			draw_state->data.state_machine.data = NULL;
+		}
+	}
+
+	else if (input_state->state == TYPE_LIST)
+	{
+		/* list changes the margin - so reset it */
+		draw_state->margin_width = draw_state->global_margin_width;
+		level_index_release(&draw_state->list_index);
+	}
+	
 	if ((draw_state->format_flags & OUTPUT_FORMAT_INLINE) == 0)
 	{
-		write(draw_state->output_file,"\n",1);
-		draw_state->offset = 0;
+		text_output_marker(draw_state,OUTPUT_MARKER_PARAGRAPH_BREAK);
+
+		level_index_release(&draw_state->list_index);
 	}
 }
 
@@ -117,65 +207,32 @@ void	text_output_footer(DRAW_STATE* draw_state, INPUT_STATE* input_state)
  *
  *        But we will clip it to line width.
  *--------------------------------------------------------------------------------*/
-void	text_output_raw(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buffer_size)
+    void	text_output_raw(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buffer_size)
 {
-	unsigned int	count;
-	unsigned int	lines;
-	unsigned int	wrapped;
-	unsigned int	offset = 0;
-	unsigned int	line_left = draw_state->page_width - draw_state->offset;
-	unsigned int	buffer_left = buffer_size;
-	
-	if ((buffer_size + draw_state->offset) > draw_state->page_width)
+	unsigned int offset = 0;
+	unsigned int start_point = 0;
+
+	while (offset < buffer_size)
 	{
-		/* write the left overs */
-		line_left = buffer_size - ((buffer_size + draw_state->offset) - draw_state->page_width);
-		line_left = word_wrap(buffer,line_left,&wrapped);
-
-		write(draw_state->output_file,buffer,line_left);
-		write(draw_state->output_file,"\n",1);
-		draw_state->offset = 0;
-		buffer_left -= line_left + wrapped;
-		offset += line_left + wrapped;
-
-		/* removed the whitespace from the word wrap */
-		if (buffer_left > 0 && (buffer[offset] == 0x20 || buffer[offset] == 0x09))
+		if (buffer[offset] == 0x0a || buffer[offset] == 0x0d)
 		{
-			offset++;
-			buffer_left--;
-		}
-
-		/* now write the width sections */
-		if (buffer_left > draw_state->page_width)
-		{
-			/* write the whole lines */
-			draw_state->offset = 0;
-
-			while((buffer_left / draw_state->page_width) > 0)
+			if (offset - start_point > 1)
 			{
-				line_left = word_wrap(&buffer[offset],draw_state->page_width,&wrapped);
-				write(draw_state->output_file,&buffer[offset],line_left);
 				write(draw_state->output_file,"\n",1);
-
-				buffer_left -= line_left + wrapped;
-				offset += line_left + wrapped;
-				
-				/* removed the whitespace from the word wrap */
-				if (buffer_left > 0 && (buffer[offset] == 0x20 || buffer[offset] == 0x09))
-				{
-					offset++;
-					buffer_left--;
-				}
+				write(draw_state->output_file,&buffer[start_point],offset-start_point);
 			}
-
-			/* now write the left over */
-			buffer_left -= (lines * draw_state->page_width);
+			start_point = offset + 1;
 		}
+		offset++;
 	}
 
-	/* dump what is left */
-	write(draw_state->output_file,&buffer[offset],buffer_left);
-	draw_state->offset += buffer_left;
+	if (start_point < offset)
+	{
+		write(draw_state->output_file,"\n",1);
+		write(draw_state->output_file,&buffer[start_point],offset-start_point);
+	}
+		
+	draw_state->offset = 0;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -346,20 +403,11 @@ void	text_output_message(DRAW_STATE* draw_state, MESSAGE* message)
 					buffer[draw_state->data.sequence.window_end] = '|';
 			}
 
-			if (message->sender->flags & FLAG_IN_FUNCTION)
-			{
-				buffer[start] = '#';
-			}
-
-			if (message->receiver->flags & FLAG_IN_FUNCTION)
-			{
-				buffer[end] = '#';
-			}
 
 			memcpy(&buffer[offset],message->name,message->name_length);
 			offset += message->name_length;
 			pos = draw_state->data.sequence.column[count] - draw_state->data.sequence.window_start;
-
+		
 			/* now write the line to the file */
 			write(draw_state->output_file,draw_state->output_buffer,draw_state->page_width+1);
 		}
@@ -367,100 +415,33 @@ void	text_output_message(DRAW_STATE* draw_state, MESSAGE* message)
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
- * Name : text_output_states
- * Desc : This function outputs the state list, which we do not need to do for
- *        the text version.
+ *  name: text_output_state_set_size
+ *  desc: This function will set the size of the graph to draw.
  *--------------------------------------------------------------------------------*/
-void	text_output_states(DRAW_STATE* draw_state, STATE* list)
+void	text_output_state_set_size(DRAW_STATE* draw_state, unsigned int nodes, unsigned int vertices)
 {
-	/* TODO: if flag table then this should handle the table start */
+	state_machine_set_size(draw_state->data.state_machine.data,nodes,vertices);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
- * Name : test_output_start_state
- * Desc : This function starts the output of the state.
+ *  name: text_output_state
+ *  desc: This function will add a state to the state_machine. This function
+ *        will add the state and the location of the node into the drawing code.
+ *
+ *        Note: the x and y are hints for drawing based on a virtual layout.
  *--------------------------------------------------------------------------------*/
-void	text_output_start_state(DRAW_STATE* draw_state,STATE* state)
+void	text_output_state(DRAW_STATE* draw_state,STATE* state, unsigned int x, unsigned int y)
 {
-	if (state->name_length > 0)
-	{
-		write(draw_state->output_file,"    ",4);
-		write(draw_state->output_file,state->name,state->name_length);
-		write(draw_state->output_file,":\n",2);
-	}
-	else
-	{
-		write(draw_state->output_file,"    <unknown>:\n",sizeof("    <unknown>:\n")-1);
-	}
+	state_machine_add_node(draw_state->data.state_machine.data,state,x,y);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
- * Name : text_output_transition
- * Desc : This function will output the transition details.
+ *  name: text_output_transition
+ *  desc: This function will add a transition to the output.
  *--------------------------------------------------------------------------------*/
-void	text_output_transition(DRAW_STATE* draw_state,STATE* state, STATE_TRANSITION* transition)
+void	text_output_transition(DRAW_STATE* draw_state,STATE* state, STATE_TRANSITION* transition,unsigned int from_id,unsigned int to_id)
 {
-	TRIGGERS*			current_triggers;
-
-	/* TODO: this needs to be clipped and margined */
-
-	write(draw_state->output_file,"        -> ",sizeof("        -> ")-1);
-	write(draw_state->output_file,transition->next_state->name,transition->next_state->name_length);
-
-	if (transition->trigger != NULL)
-	{
-		write(draw_state->output_file," when ",sizeof(" when ")-1);
-
-		if (state->group != transition->trigger->group)
-		{
-			write(draw_state->output_file,transition->trigger->group->name,transition->trigger->group->name_length);
-			write(draw_state->output_file,":",1);
-		}
-
-		write(draw_state->output_file,transition->trigger->name,transition->trigger->name_length);
-	}
-	else if (transition->condition != NULL)
-	{
-		write(draw_state->output_file," when '",sizeof(" when '")-1);
-		write(draw_state->output_file,transition->condition,transition->condition_length);
-	}
-
-	if (transition->triggers != NULL)
-	{
-		write(draw_state->output_file," triggering ",sizeof(" triggering ")-1);
-
-		current_triggers = transition->triggers;
-
-		do
-		{
-			if (state->group != current_triggers->trigger->group)
-			{
-				write(draw_state->output_file,current_triggers->trigger->group->name,current_triggers->trigger->group->name_length);
-				write(draw_state->output_file,":",1);
-			}
-
-			write(draw_state->output_file,current_triggers->trigger->name,current_triggers->trigger->name_length);
-
-			if (current_triggers->next != NULL)
-			{
-				write(draw_state->output_file,",",1);
-			}
-			current_triggers = current_triggers->next;
-		} 
-		while (current_triggers != NULL);
-	}
-
-	write(draw_state->output_file,"\n",1);
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : test_output_end_state
- * Desc : This function does nothing for the text format as the state does not
- *        need ending.
- *--------------------------------------------------------------------------------*/
-void	text_output_end_state(DRAW_STATE* draw_state,STATE* state)
-{
-
+	state_machine_add_vertex(draw_state->data.state_machine.data,transition,from_id,to_id);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -471,8 +452,9 @@ void	text_output_end_state(DRAW_STATE* draw_state,STATE* state)
 void	text_output_marker(DRAW_STATE* draw_state, unsigned int marker)
 {
 	unsigned char array[1];
+	unsigned char	level = marker & ~(OUTPUT_MARKER_MASK);
 
-	switch ((marker & 0xffff0000))
+	switch ((marker & OUTPUT_MARKER_MASK))
 	{
 		case OUTPUT_MARKER_CODE_START:
 		case OUTPUT_MARKER_CODE_END:
@@ -480,9 +462,20 @@ void	text_output_marker(DRAW_STATE* draw_state, unsigned int marker)
 		case OUTPUT_MARKER_BLOCK_END:
 		case OUTPUT_MARKER_EMP_START:
 		case OUTPUT_MARKER_EMP_END:
-		case OUTPUT_MARKER_HEADER_START:
 		case OUTPUT_MARKER_HEADER_END:
 			/* all the above do nothing */
+			break;
+
+		case OUTPUT_MARKER_HEADER_START:
+			if ((marker & OUTPUT_MARKER_NO_INDEX) == 0)
+			{
+				level_index_set_level(&draw_state->index,level);
+			}
+			break;
+
+		case OUTPUT_MARKER_PARAGRAPH_BREAK:
+			draw_state->offset = 0;
+			write(draw_state->output_file,"\n\n",2);
 			break;
 
 		case OUTPUT_MARKER_LINE_BREAK:
@@ -500,43 +493,49 @@ void	text_output_marker(DRAW_STATE* draw_state, unsigned int marker)
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * @name: text_output_text
- * @desc: This function will output the text the the output file.
+ * @desc: This function will output the text to the output file.
  *--------------------------------------------------------------------------------*/
 void	text_output_text(DRAW_STATE* draw_state, unsigned int text_style, NAME* text)
 {
 	if (text_style & OUTPUT_TEXT_STYLE_L_NEWLINE)
 	{
 		write(draw_state->output_file,"\n",1);
+		draw_state->offset = 0;
 	}
 
 	if (text_style & (OUTPUT_TEXT_STYLE_L_SPACE | OUTPUT_TEXT_STYLE_SPACED))
 	{
 		write(draw_state->output_file," ",1);
+		draw_state->offset++;
 	}
 
-	if (text_style & (OUTPUT_TEXT_STYLE_BOLD | OUTPUT_TEXT_STYLE_ITALIC))
+	if (text_style & OUTPUT_TEXT_STYLE_ITALIC)
 	{
 		write(draw_state->output_file,"*",1);
+		draw_state->offset++;
 	}
 
 	if (text != NULL)
 	{
-		write(draw_state->output_file,text->name,text->name_length);
+		write_text(draw_state,text);
 	}
 
-	if (text_style & (OUTPUT_TEXT_STYLE_BOLD | OUTPUT_TEXT_STYLE_ITALIC))
+	if (text_style & OUTPUT_TEXT_STYLE_ITALIC)
 	{
 		write(draw_state->output_file,"*",1);
+		draw_state->offset++;
 	}
 
 	if (text_style & (OUTPUT_TEXT_STYLE_T_SPACE | OUTPUT_TEXT_STYLE_SPACED))
 	{
 		write(draw_state->output_file," ",1);
+		draw_state->offset++;
 	}
 
 	if (text_style & OUTPUT_TEXT_STYLE_T_NEWLINE)
 	{
 		write(draw_state->output_file,"\n",1);
+		draw_state->offset = 0;
 	}
 }
 
@@ -545,7 +544,7 @@ void	text_output_text(DRAW_STATE* draw_state, unsigned int text_style, NAME* tex
  * @desc: This function will output a section and the headers. It will output
  *        the section data block to the format specified in the format fields.
  *--------------------------------------------------------------------------------*/
-void	text_output_section( DRAW_STATE*  draw_state, unsigned int header_level, NAME* name, unsigned int format, NAME* section_data)
+void	text_output_section( DRAW_STATE* draw_state, unsigned int header_level, NAME* name, unsigned int format, NAME* section_data)
 {
 	/* text version ignores the header level */
 	write(draw_state->output_file,"\n",1);
@@ -729,7 +728,6 @@ void	text_output_table_header(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout
 		memset(draw_state->output_buffer,' ',draw_state->page_width);
 
 		/* ok, we have a valid table */
-		write(draw_state->output_file,"\n",1);
 		write(draw_state->output_file,draw_state->output_buffer,draw_state->margin_width);
 		
 		for (count=0; count < table_layout->num_columns; count++)
@@ -769,7 +767,7 @@ void	text_output_table_header(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout
 void	text_output_table_row(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout,TABLE_ROW* table_rows)
 {
 	unsigned int	column;
-	unsigned int	wrapped;
+	unsigned int	wrapped = 0;
 	unsigned int	clipped = 0;
 	unsigned int	write_size = 0;
 		
@@ -795,6 +793,7 @@ void	text_output_table_row(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout,TA
 
 			/* write each column */
 			for (column = 0; column < table_layout->num_columns; column++)
+
 			{
 				if (table_rows->row[column] != NULL && table_rows->row[column]->name)
 				{
@@ -805,9 +804,8 @@ void	text_output_table_row(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout,TA
 						if ((table_layout->column[column].flags & OUTPUT_COLUMN_FORMAT_WORD_WRAP) != 0)
 						{
 							write_size = word_wrap(&table_rows->row[column]->name[table_rows->copied[column]],write_size,&wrapped);
-							wrapped = 1;
 						}
-						
+
 						write(draw_state->output_file,&table_rows->row[column]->name[table_rows->copied[column]],write_size);
 
 						/* adjust the counts */
@@ -847,5 +845,92 @@ void	text_output_table_row(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout,TA
  *--------------------------------------------------------------------------------*/
 void	text_output_table_end(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout)
 {
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_index_chapter
+ * Desc : 
+ *--------------------------------------------------------------------------------*/
+void	text_output_index_chapter(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_index_start_sublevel
+ * Desc : This function will write the sub-level.
+ *--------------------------------------------------------------------------------*/
+void	text_output_index_start_sublevel(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+	write_text_index_entry(draw_state,index_item);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_index_entry
+ * Desc : This function will write the index entry.
+ *--------------------------------------------------------------------------------*/
+void	text_output_index_entry(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+	write_text_index_entry(draw_state,index_item);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_index_end_sublevel
+ * Desc : This function will write the index entry.
+ *--------------------------------------------------------------------------------*/
+void	text_output_index_end_sublevel(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_list_start
+ * Desc : This function starts the list items for items that have a symbolic
+ *        start.
+ *--------------------------------------------------------------------------------*/
+void	text_output_list_item_start(DRAW_STATE* draw_state, unsigned int level, unsigned char marker)
+{
+	NAME	marker_str;
+	
+	marker_str.name = &marker;
+	marker_str.name_length = 1;
+
+	draw_state->margin_width = draw_state->global_margin_width * (level + 2) - 2;
+	text_output_text(draw_state,OUTPUT_TEXT_STYLE_NORMAL,&marker_str);
+	draw_state->margin_width += 2;
+
+	level_index_set_level(&draw_state->list_index,level);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_list_numeric_start
+ * Desc : This handles the list items that have a numeric index.
+ *--------------------------------------------------------------------------------*/
+void	text_output_list_numeric_start(DRAW_STATE* draw_state, unsigned int level)
+{
+	NAME			number = {NULL,0,0,0};
+	unsigned int	index;
+	unsigned char	number_buffer[40];
+
+	level_index_set_level(&draw_state->list_index,level);
+	index = level_index_get_index(&draw_state->list_index,level);
+
+	/* convert and output the number */
+	number.name = number_buffer;
+	number.name_length = IntToAlphaSafe(index,number_buffer,sizeof(number_buffer));
+	
+	draw_state->margin_width = draw_state->global_margin_width * (level + 2) - number.name_length - 1;
+
+	number_buffer[number.name_length-1] = '.';
+	text_output_text(draw_state,OUTPUT_TEXT_STYLE_NORMAL,&number);
+	draw_state->margin_width = draw_state->global_margin_width * (level + 2);
+
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : text_output_list_end
+ * Desc : This function will end the list items.
+ *--------------------------------------------------------------------------------*/
+void	text_output_list_end(DRAW_STATE* draw_state)
+{
+	text_output_marker(draw_state,OUTPUT_MARKER_LINE_BREAK);
 }
 

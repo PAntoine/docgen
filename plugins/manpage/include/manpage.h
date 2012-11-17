@@ -18,5 +18,11 @@
 
 #define	MANPAGE_VERSION	((unsigned char) 0x01)
 
+typedef struct
+{
+	unsigned int	list_level;
+
+} MANPAGE_DATA;
+
 #endif
 

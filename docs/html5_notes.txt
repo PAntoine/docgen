@@ -1,0 +1,103 @@
+Canvas Mouse Movement functions
+-------------------------------
+
+$('#canvas').mousedown(function(e){
+  var mouseX = e.pageX - this.offsetLeft;
+  var mouseY = e.pageY - this.offsetTop;
+
+});
+
+--------- another example of the use of canvas and stuff --------
+
+function init() {
+     context = document.getElementById('canvas').getContext('2d');   
+     canvas.addEventListener('mousemove', function(e) {
+         x = e.offsetX / 670 * 8710; 
+     }, false);
+     setInterval(loop, 1);
+}
+
+function loop() {
+     destx += (x - destx) * 0.04;
+     ind = Math.floor(destx/670);
+     offset = destx % 670;
+     context.drawImage(photos[ind], offset, 0, 670-offset, 503, 0, 0, 670-offset, 503);
+     context.drawImage(photos[ind+1], 0, 0, 670, 503, 670-offset, 0, 670, 503);
+}
+
+
+Sample html5 webpage.
+---------------------
+
+<html>
+<head>
+   <title>HTML 5 Tutorial Sample</title>
+   <link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<!-- Defining Header -->
+  <header>
+          <h1>HTML 5 Tutorial Sample </h1>
+     </header>
+     <!-- Defining Navigation -->
+<nav>
+       <ul>
+       <li><a href="#">Home</a></li>
+              <li><a href="#">About Us</a></li>
+                     <li><a href="#">Feedback</a></li>
+                            <li><a href="#">Contact</a></li>
+       </ul>
+</nav>
+<div id="content">
+<div id="mcontent">
+<!-- Defining Header for content section -->
+<header>
+<h2>About US</h2>
+</header>
+<!-- Defining Content Section -->
+<section>
+<!-- Defining content section article -->
+<article class="bpage">
+<div>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin euismod tellus eu orci imperdiet nec rutrum lacus blandit. Cras enim nibh, sodales ultricies elementum vel, fermentum id tellus. Proin metus odio, ultricies eu pharetra dictum, laoreet id odio. Curabitur in odio augue. Morbi congue auctor interdum. Phasellus sit amet metus justo. Phasellus vitae tellus orci, at elementum ipsum. In in quam eget diam adipiscing condimentum. Maecenas gravida diam vitae nisi convallis vulputate quis sit amet nibh. Nullam ut velit tortor. Curabitur ut elit id nisl volutpat consectetur ac ac lorem. Quisque non elit et elit lacinia lobortis nec a velit. Sed ac nisl sed enim consequat porttitor.</p>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin euismod tellus eu orci imperdiet nec rutrum lacus blandit. Cras enim nibh, sodales ultricies elementum vel, fermentum id tellus. Proin metus odio, ultricies eu pharetra dictum, laoreet id odio. Curabitur in odio augue. Morbi congue auctor interdum. Phasellus sit amet metus justo. Phasellus vitae tellus orci, at elementum ipsum. In in quam eget diam adipiscing condimentum. Maecenas gravida diam vitae nisi convallis vulputate quis sit amet nibh. Nullam ut velit tortor. Curabitur ut elit id nisl volutpat consectetur ac ac lorem. Quisque non elit et elit lacinia lobortis nec a velit. Sed ac nisl sed enim consequat porttitor.</p>
+</div>
+<div class="image">
+</div>
+				</article>
+</section></div>
+<!-- Defining Sidebar / Aside -->
+<aside>
+<section>
+<ul>
+       <li><a href="#">Home</a></li>
+              <li><a href="#">About Us</a></li>
+                     <li><a href="#">Feedback</a></li>
+                            <li><a href="#">Contact</a></li>
+       </ul>
+</section>
+<section>
+<ul>
+       <li><a href="#">Home</a></li>
+              <li><a href="#">About Us</a></li>
+                     <li><a href="#">Feedback</a></li>
+                            <li><a href="#">Contact</a></li>
+       </ul>
+</section>
+<section>
+<ul>
+       <li><a href="#">Home</a></li>
+              <li><a href="#">About Us</a></li>
+                     <li><a href="#">Feedback</a></li>
+                            <li><a href="#">Contact</a></li>
+       </ul>
+</section>
+
+
+</aside>
+</div>
+<!-- Defining Footer -->
+<footer>
+<section>Anything you want to put in footer goes here. </section>
+</footer>
+</html>
+

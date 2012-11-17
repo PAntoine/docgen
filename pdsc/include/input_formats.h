@@ -78,6 +78,8 @@ typedef struct
 /*--------------------------------------------------------------------------------*
  * C/C++ source handler functions.
  *--------------------------------------------------------------------------------*/
+unsigned int	input_decode_format(unsigned char* file_name);
+
 unsigned int	c_find_comment(unsigned char* line,unsigned int line_length,unsigned int* pos);
 unsigned int	c_end_comment(unsigned char* line,unsigned int line_length,unsigned int* pos);
 unsigned int	c_function_start(unsigned char* line,unsigned int line_length,unsigned int* pos, NAME* return_type, NAME* name);

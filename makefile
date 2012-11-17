@@ -27,17 +27,22 @@ export BUILD_TYPE ?= $(BUILD_OS)_$(MACHINE_NAME)
 export MAKECMDGOALS ?= build
 
 # list of files/directories to be released
-SOURCE_RELEASE_DIRS = pdp pdsc pdsl $(filter-out plugins/makefile,$(wildcard plugins/*))
-EXTRA_RELEASE_FILES = readme.md makefile gdbbatch docs/specification.txt docs/TODO.txt plugins/makefile
+# SOURCE_RELEASE_DIRS is a list of "structured" directories, where the others are hodge-podge
+# so the order is not predictable. Also the ignored release list are files that are not
+# normally tracked by are required for release.
+SOURCE_RELEASE_DIRS = common pdp pdsc pdsl tests $(filter-out plugins/makefile,$(wildcard plugins/*))
+EXTRA_RELEASE_FILES = build readme.md makefile gdbbatch docs/specification.md docs/TODO.md docs/release_note.md plugins/makefile support_files
+IGNORED_RELEASE_LIST = docs/html docs/manpage docs/text
 
-BINARY_RELEASE_LIST	= docs/html docs/manpage docs/text docs/specification.txt docs/TODO.txt readme.md
+BINARY_RELEASE_LIST	= docs/html docs/manpage docs/text docs/specification.md docs/TODO.md readme.md output tests/include tests/source tests/makefile
 
 #--------------------------------------------------------------------------------
 # Components that are required to be built.
 #--------------------------------------------------------------------------------
-export COMPONENTS ?= pdp pdsl pdsc plugins
-export DOCS_COMPONENTS = $(addprefix docs_,$(COMPONENTS))
-export BUILD_COMPONENTS = $(addprefix build_,$(COMPONENTS))
+COMPONENTS ?= pdp pdsl pdsc plugins
+DOCS_COMPONENTS = $(addprefix docs_,$(COMPONENTS))
+BUILD_COMPONENTS = $(addprefix build_,$(COMPONENTS))
+CLEAN_COMPONENTS = $(addprefix clean_,$(ALL_COMPONENTS))
 
 # lets load the defaults
 include build/$(BUILD_TYPE).mak
@@ -45,28 +50,29 @@ include build/$(BUILD_TYPE).mak
 #--------------------------------------------------------------------------------
 # build targets
 #--------------------------------------------------------------------------------
-.PHONY:	build $(ALL_COMPONENTS) $(DOCS_COMPONENTS) $(BUILD_COMPONENTS)
+.PHONY:	build $(ALL_COMPONENTS) $(DOCS_COMPONENTS) $(BUILD_COMPONENTS) support_files
 
 build: output $(BUILD_COMPONENTS)
 
 docs: build $(DOCS_COMPONENTS)
 
-clean: $(ALL_COMPONENTS)
-	@$(MAKE) -s -C tests clean
+clean: $(CLEAN_COMPONENTS)
 	@-$(RMSUBDIR) object
 	@-$(RMSUBDIR) output
 
-tests: build
-
-fine:
 $(DOCS_COMPONENTS):
 	@$(MAKE) -s -C $(subst docs_,,$@) docs
 
-$(BUILD_COMPONENTS):
+$(BUILD_COMPONENTS): support_files
 	@$(MAKE) -s -C $(subst build_,,$@) build
 
+$(CLEAN_COMPONENTS):
+	@$(MAKE) -s -C $(subst clean_,,$@) clean
+
+tests: build 
+
 $(ALL_COMPONENTS):
-	@$(MAKE) -C $@ $(MAKECMDGOALS)
+	@$(MAKE) -s -C $@ $(MAKECMDGOALS)
 
 output:
 	@$(MKDIR) output

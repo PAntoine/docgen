@@ -1,0 +1,103 @@
+
+.TH pdsl 1
+.LP
+
+.LP
+
+.B Name
+.I pdsl
+.LP
+.B Synopsis
+.LP
+.B pdsl
+.
+[
+.B -v
+.
+] 
+[
+.B -q
+.
+] 
+.B -o
+.
+<output file name> 
+.B input_files
+.
+\&... 
+.LP
+.LP
+.B Options
+.LP
+.TS
+left,tab(#);
+lb  lb.
+T{
+-v
+T}#T{
+
+T}
+#T{
+This produces extra output information during the generation of the output. 
+T}
+T{
+-q
+T}#T{
+
+T}
+#T{
+quiet. This flag suppresses any non-error output from the application. 
+T}
+T{
+-o
+T}#T{
+<output file name>
+T}
+#T{
+This function defines the name of the output file produced by this application. If the name is not given then it will default to "doc.gout". 
+T}
+T{
+-?
+T}#T{
+
+T}
+#T{
+This outputs the help message. 
+T}
+T{
+input_files
+T}#T{
+
+T}
+#T{
+The object file(s) to link together. 
+T}
+.TE
+
+.LP
+.PD 4 
+
+.B Description
+.RS
+Document Source Linker This application will take all the specified input_files that have been generated from the document compiler 
+.B pdsc
+.
+and link them together as a  single object file. This object will have all the components for each of the compiled source files, it will link all objects that are either grouped together or reference each other (i.e. state_machines or sequence_diagrams). It produces an output file that can be passed to the document processor (*pdp*) that can be used as the model to be used to generate final documents.
+.RE
+
+.PD 4 
+
+.B Error Reporting
+.RS
+Please report any problems to https://github.com/PAntoine/docgen
+.RE
+
+.PD 4 
+
+.B Author 
+.RS
+Peter Antoine
+.RE
+
+.PD
+.LP

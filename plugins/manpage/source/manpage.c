@@ -20,6 +20,7 @@
 #include "utilities.h"
 #include "error_codes.h"
 #include "output_format.h"
+#include "state_machine.h"
 #include "document_generator.h"
 
 
@@ -27,6 +28,14 @@
  * default page width - used only for laying out sequence diagrams.
  *--------------------------------------------------------------------------------*/
 #define DEFAULT_PAGE_WIDTH	(120)
+
+/*--------------------------------------------------------------------------------*
+ * String Constants.
+ *--------------------------------------------------------------------------------*/
+static unsigned char	list_level_string[]	= "                                ";
+static unsigned char	chapter_string[]	= "Chapter";
+
+#define	CHAPTER_LENGTH	(sizeof(chapter_string)-1)
 
 /*--------------------------------------------------------------------------------*
  * Plugin Globals
@@ -50,10 +59,9 @@ static	OUTPUT_FORMAT	format =
 	format_timelines,
 	format_message,
 
-	format_states,
-	format_start_state,
+	format_state_set_size,
+	format_state,
 	format_transition,
-	format_end_state,
 
 	format_marker,
 
@@ -68,6 +76,15 @@ static	OUTPUT_FORMAT	format =
 	format_table_row,
 	format_table_end,
 
+	format_index_chapter,
+	format_index_start_sublevel,
+	format_index_entry,
+	format_index_end_sublevel,
+
+	format_list_item_start,
+	format_list_numeric_start,
+	format_list_end,
+
 	0L
 };
 
@@ -80,7 +97,8 @@ static	PLUGIN_LIBRARY plugin_library =
 	DGOF_PLUGIN_OUTPUT,
 	DGOF_plugin_release,
 	0L,
-	&format
+	&format,
+	0L
 };
 
 /*--------------------------------------------------------------------------------*
@@ -97,7 +115,7 @@ static unsigned char troff_header_2     [] = "\n.PD 4 \n";
 static unsigned char troff_header_3     [] = "\n.PD 8 \n";
 static unsigned char troff_header_4     [] = "\n.PD 12\n";
 static unsigned char troff_new_para		[] = "\n.LP";
-static unsigned char troff_indent_para	[] = "\n.IP ";		/*[designator]	[nnn] */
+static unsigned char troff_indent_para	[] = ".IP ";		/*[designator]	[nnn] - no leading \n */
 static unsigned char troff_hang_param	[] = "\n.HP ";		/*[nnn] */
 static unsigned char troff_margin_right	[] = "\n.RS\n";		/*[nnn] */
 static unsigned char troff_margin_left	[] = "\n.RE\n";		/*[nnn] */
@@ -107,6 +125,8 @@ static unsigned char troff_bold			[] = "\n.B ";		/*[text] */
 static unsigned char troff_italic		[] = "\n.I ";		/*[text] */
 static unsigned char troff_ignore		[] = "\n\\&";		/* ignore and use test verbatim */
 static unsigned char troff_comment		[] = "\n.\\\"";		/* word */
+
+static unsigned char troff_bullet		[] = "\\(bu";		/* bullet glyph */
 
 static const unsigned int	troff_title_size 			= sizeof(troff_title)-1;
 static const unsigned int	troff_section_size 			= sizeof(troff_section)-1;
@@ -126,6 +146,7 @@ static const unsigned int	troff_bold_size 			= sizeof(troff_bold)-1;
 static const unsigned int	troff_italic_size 			= sizeof(troff_italic)-1;
 static const unsigned int	troff_ignore_size 			= sizeof(troff_ignore)-1;
 static const unsigned int	troff_comment_size 			= sizeof(troff_comment)-1;
+static const unsigned int	troff_bullet_size 			= sizeof(troff_bullet)-1;
 
 static unsigned char tbl_start	[] = "\n.TS\n";
 static unsigned char tbl_end	[] = "\n.TE\n";
@@ -225,9 +246,9 @@ static void	write_escaped_manpage(int file_no, unsigned char* buffer, unsigned i
  * @name: format_decode_flags
  * @desc: 
  *--------------------------------------------------------------------------------*/
-unsigned int	format_decode_flags(INPUT_STATE* input_state, unsigned hash, NAME* value)
+unsigned int	format_decode_flags(DRAW_STATE* draw_state, INPUT_STATE* input_state, unsigned hash, NAME* value)
 {
-	unsigned int result;
+	unsigned int result = OUTPUT_FLAG_TYPE_BOOLEAN;
 
 	return result;
 }
@@ -237,7 +258,7 @@ unsigned int	format_decode_flags(INPUT_STATE* input_state, unsigned hash, NAME* 
  * @desc: This function will open the manpage and add the file header to the 
  *        page.
  *--------------------------------------------------------------------------------*/
-unsigned int	format_open(DRAW_STATE* draw_state, unsigned char* name, unsigned int name_length)
+unsigned int	format_open(DRAW_STATE* draw_state, INPUT_STATE* input_state, unsigned char* name, unsigned int name_length)
 {
 	unsigned int result = EC_FAILED;
 	unsigned int length = name_length + draw_state->path_length;
@@ -254,6 +275,7 @@ unsigned int	format_open(DRAW_STATE* draw_state, unsigned char* name, unsigned i
 		draw_state->page_width = DEFAULT_PAGE_WIDTH;
 		draw_state->global_margin_width = 1;
 		draw_state->global_format_flags = 0;
+		draw_state->global_max_constant = 50;
 
 		draw_state->output_buffer = malloc(draw_state->page_width + 1);
 		draw_state->output_buffer[draw_state->page_width] = '\n';
@@ -267,6 +289,9 @@ unsigned int	format_open(DRAW_STATE* draw_state, unsigned char* name, unsigned i
 			write(draw_state->output_file,troff_new_para,troff_new_para_size);
 			write(draw_state->output_file,"\n",1);
 
+			/* create the format state data */
+			draw_state->format_state = calloc(1,sizeof(MANPAGE_DATA));
+
 			result = EC_OK;
 		}
 	}
@@ -277,12 +302,18 @@ unsigned int	format_open(DRAW_STATE* draw_state, unsigned char* name, unsigned i
  * @name: format_close
  * @desc: 
  *--------------------------------------------------------------------------------*/
-void	format_close(DRAW_STATE* draw_state)
+void	format_close(DRAW_STATE* draw_state, INPUT_STATE* input_state)
 {
 	if (draw_state->output_file != -1)
 	{
 		close(draw_state->output_file);
 		free(draw_state->output_buffer);
+	}
+
+	if (draw_state->format_state != NULL)
+	{
+		free(draw_state->format_state);
+		draw_state->format_state = NULL;
 	}
 }
 
@@ -292,6 +323,19 @@ void	format_close(DRAW_STATE* draw_state)
  *--------------------------------------------------------------------------------*/
 void	format_header(DRAW_STATE* draw_state, INPUT_STATE* input_state)
 {
+	switch(input_state->state)
+	{
+		case TYPE_STATE_MACHINE:
+			state_machine_allocate((TEXT_STATE_MACHINE**)&draw_state->data.state_machine.data);
+			write(draw_state->output_file,troff_no_interspace,troff_no_interspace_size);
+			break;
+
+		case TYPE_LIST:
+			((MANPAGE_DATA*)draw_state->format_state)->list_level = UINT_MAX;
+			level_index_init(&draw_state->list_index);
+			break;
+	}
+	
 	if ((draw_state->format_flags & OUTPUT_FORMAT_INLINE) == 0)
 	{
 		write(draw_state->output_file,troff_new_para,troff_new_para_size);
@@ -300,11 +344,48 @@ void	format_header(DRAW_STATE* draw_state, INPUT_STATE* input_state)
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
+ * Name : manpage_list_level_up
+ * Desc : This function will end the lists on the way up.
+ *--------------------------------------------------------------------------------*/
+static void	manpage_list_level_up(DRAW_STATE* draw_state, unsigned int new_level)
+{
+	unsigned int count;
+
+	if (((MANPAGE_DATA*)draw_state->format_state)->list_level != UINT_MAX)
+	{
+		for (count = ((MANPAGE_DATA*)draw_state->format_state)->list_level; count > new_level; count--)
+		{
+			write(draw_state->output_file,troff_margin_left,troff_margin_left_size);
+		}
+	}
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
  * @name: format_footer
- * @desc: 
+ * @desc: This function handles the ending of the sections.
  *--------------------------------------------------------------------------------*/
 void	format_footer(DRAW_STATE* draw_state, INPUT_STATE* input_state)
 {
+	switch(input_state->state)
+	{
+		case  TYPE_STATE_MACHINE:
+			if (draw_state->data.state_machine.data != NULL)
+			{
+				state_machine_draw(draw_state->data.state_machine.data,draw_state);
+				state_machine_release(draw_state->data.state_machine.data);
+				draw_state->data.state_machine.data = NULL;
+
+				write(draw_state->output_file,troff_interspace,troff_interspace_size);
+				write(draw_state->output_file,troff_new_para,troff_new_para_size);
+				write(draw_state->output_file,"\n",1);
+			}
+		break;
+
+		case TYPE_LIST:
+			manpage_list_level_up(draw_state,0);
+		break;
+	}
+
 	if ((draw_state->format_flags & OUTPUT_FORMAT_INLINE) == 0)
 	{
 		write(draw_state->output_file,troff_interspace,troff_interspace_size);
@@ -331,6 +412,7 @@ void	format_raw(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buff
 		{
 			if (offset - start_point > 1)
 			{
+				write(draw_state->output_file,"\n ",2);
 				write(draw_state->output_file,&buffer[start_point],offset-start_point);
 			}
 			start_point = offset + 1;
@@ -340,6 +422,7 @@ void	format_raw(DRAW_STATE* draw_state, unsigned char* buffer, unsigned int buff
 
 	if (start_point < offset)
 	{
+		write(draw_state->output_file,"\n ",2);
 		write(draw_state->output_file,&buffer[start_point],offset-start_point);
 	}
 }
@@ -551,107 +634,30 @@ void	format_message(DRAW_STATE* draw_state, MESSAGE* message)
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
- * @name: format_states
- * @desc: 
+ *  name: format_state_set_size
+ *  desc: This function sets the size of the state machine graph.
  *--------------------------------------------------------------------------------*/
-void	format_states(DRAW_STATE* draw_state,STATE* list)
+void	format_state_set_size(DRAW_STATE* draw_state, unsigned int nodes, unsigned int vertices)
 {
-
+	state_machine_set_size(draw_state->data.state_machine.data,nodes,vertices);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
- * @name: format_end_state
- * @desc: 
+ * @name: format_state
+ * @desc: This function handles the state.
  *--------------------------------------------------------------------------------*/
-void	format_end_state(DRAW_STATE* draw_state,STATE* state)
+void	format_state(DRAW_STATE* draw_state,STATE* state, unsigned int x, unsigned int y)
 {
-	if (state->name_length > 0)
-	{
-		write(draw_state->output_file,"    ",4);
-		write(draw_state->output_file,state->name,state->name_length);
-		write(draw_state->output_file,":\n",2);
-	}
-	else
-	{
-		write(draw_state->output_file,"    <unknown>:\n",sizeof("    <unknown>:\n")-1);
-	}
+	state_machine_add_node(draw_state->data.state_machine.data,state,x,y);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
  * @name: format_transition
- * @desc: 
+ * @desc: This function handles a transition of the state_machine.
  *--------------------------------------------------------------------------------*/
-void	format_transition(DRAW_STATE* draw_state,STATE* state, STATE_TRANSITION* transition)
+void	format_transition(DRAW_STATE* draw_state,STATE* state, STATE_TRANSITION* transition, unsigned int from_id, unsigned int to_id)
 {
-	TRIGGERS*			current_triggers;
-
-	/* TODO: this needs to be clipped and margined */
-
-	write(draw_state->output_file,"        -> ",sizeof("        -> ")-1);
-	write(draw_state->output_file,transition->next_state->name,transition->next_state->name_length);
-
-	if (transition->trigger != NULL)
-	{
-		write(draw_state->output_file," when ",sizeof(" when ")-1);
-
-		if (state->group != transition->trigger->group)
-		{
-			write(draw_state->output_file,transition->trigger->group->name,transition->trigger->group->name_length);
-			write(draw_state->output_file,":",1);
-		}
-
-		write(draw_state->output_file,transition->trigger->name,transition->trigger->name_length);
-	}
-	else if (transition->condition != NULL)
-	{
-		write(draw_state->output_file," when '",sizeof(" when '")-1);
-		write(draw_state->output_file,transition->condition,transition->condition_length);
-	}
-
-	if (transition->triggers != NULL)
-	{
-		write(draw_state->output_file," triggering ",sizeof(" triggering ")-1);
-
-		current_triggers = transition->triggers;
-
-		do
-		{
-			if (state->group != current_triggers->trigger->group)
-			{
-				write(draw_state->output_file,current_triggers->trigger->group->name,current_triggers->trigger->group->name_length);
-				write(draw_state->output_file,":",1);
-			}
-
-			write(draw_state->output_file,current_triggers->trigger->name,current_triggers->trigger->name_length);
-
-			if (current_triggers->next != NULL)
-			{
-				write(draw_state->output_file,",",1);
-			}
-			current_triggers = current_triggers->next;
-		} 
-		while (current_triggers != NULL);
-	}
-
-	write(draw_state->output_file,"\n",1);
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * @name: format_start_state
- * @desc: 
- *--------------------------------------------------------------------------------*/
-void	format_start_state(DRAW_STATE* draw_state,STATE* state)
-{
-	if (state->name_length > 0)
-	{
-		write(draw_state->output_file,"    ",4);
-		write(draw_state->output_file,state->name,state->name_length);
-		write(draw_state->output_file,":\n",2);
-	}
-	else
-	{
-		write(draw_state->output_file,"    <unknown>:\n",sizeof("    <unknown>:\n")-1);
-	}
+	state_machine_add_vertex(draw_state->data.state_machine.data,transition,from_id,to_id);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -679,6 +685,11 @@ void	format_marker(DRAW_STATE* draw_state, unsigned int marker)
 			break;
 
 		case OUTPUT_MARKER_HEADER_START:
+			if ((marker & OUTPUT_MARKER_NO_INDEX) == 0)
+			{
+				level_index_set_level(&draw_state->index,level);
+			}
+
 			if (level == 0)
 			{
 				write(draw_state->output_file,troff_section,troff_section_size);
@@ -688,10 +699,12 @@ void	format_marker(DRAW_STATE* draw_state, unsigned int marker)
 				write(draw_state->output_file,troff_subsection,troff_subsection_size);
 			}
 			break;
+
 		case OUTPUT_MARKER_HEADER_END:
 			write(draw_state->output_file,"\n",1);
 			break;
 
+		case OUTPUT_MARKER_PARAGRAPH_BREAK:
 		case OUTPUT_MARKER_LINE_BREAK:
 			draw_state->offset = 0;
 			write(draw_state->output_file,troff_new_para,troff_new_para_size);
@@ -714,7 +727,10 @@ void	format_text(DRAW_STATE* draw_state, unsigned int text_style, NAME* text)
 {
 	if ((text_style & ~(OUTPUT_TEXT_STYLE_L_SPACE|OUTPUT_TEXT_STYLE_T_SPACE|OUTPUT_TEXT_STYLE_SPACED)) == OUTPUT_TEXT_STYLE_NORMAL)
 	{
-		write(draw_state->output_file,"\n",1);
+		if (!draw_state->no_space)
+		{
+			write(draw_state->output_file,"\n",1);
+		}
 	}
 
 	if (text_style & OUTPUT_TEXT_STYLE_L_NEWLINE)
@@ -729,10 +745,11 @@ void	format_text(DRAW_STATE* draw_state, unsigned int text_style, NAME* text)
 	}
 #endif
 
-	if (text_style & (OUTPUT_TEXT_STYLE_BOLD | OUTPUT_TEXT_STYLE_ITALIC))
+	if (text_style & OUTPUT_TEXT_STYLE_BOLD)
 	{
 		write(draw_state->output_file,troff_bold,troff_bold_size);
 	}
+	
 	if (text_style & (OUTPUT_TEXT_STYLE_ITALIC))
 	{
 		write(draw_state->output_file,troff_italic,troff_italic_size);
@@ -745,12 +762,17 @@ void	format_text(DRAW_STATE* draw_state, unsigned int text_style, NAME* text)
 			write(draw_state->output_file,"\\&",2);
 		}
 
+		if (text_style & OUTPUT_TEXT_STYLE_ASCII_ART)
+		{
+			write(draw_state->output_file,"\n",1);
+		}
+
 		write(draw_state->output_file,text->name,text->name_length);
 	}
 
 	if (text_style & (OUTPUT_TEXT_STYLE_BOLD | OUTPUT_TEXT_STYLE_ITALIC))
 	{
-		write(draw_state->output_file,"\n.",2);
+	/*	write(draw_state->output_file,"\n.",2); */
 	}
 	else if (text_style & (OUTPUT_TEXT_STYLE_T_SPACE | OUTPUT_TEXT_STYLE_SPACED))
 	{
@@ -970,5 +992,124 @@ void	format_table_end(DRAW_STATE* draw_state, TABLE_LAYOUT* table_layout)
 
 	write(draw_state->output_file,tbl_end,tbl_end_size);
 	write(draw_state->output_file,troff_new_para,troff_new_para_size);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : format_index_chapter
+ * Desc : This index chapter.
+ *--------------------------------------------------------------------------------*/
+void	format_index_chapter(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : format_index_start_sublevel
+ * Desc : The start sub-level
+ *--------------------------------------------------------------------------------*/
+void	format_index_start_sublevel(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+	write_text_index_entry(draw_state,index_item);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : format_index_entry
+ * Desc : The same level.
+ *--------------------------------------------------------------------------------*/
+void	format_index_entry(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+	write_text_index_entry(draw_state,index_item);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * Name : format_index_end_sublevel
+ * Desc : end the sub level.
+ *--------------------------------------------------------------------------------*/
+void	format_index_end_sublevel(DRAW_STATE* draw_state, DOC_SECTION* index_item)
+{
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * name: format_list_start
+ * desc: The format output essentially does nothing.
+ *--------------------------------------------------------------------------------*/
+void	format_list_item_start(DRAW_STATE* draw_state, unsigned int level, unsigned char marker)
+{
+	if (((MANPAGE_DATA*)draw_state->format_state)->list_level > level)
+	{
+		/* reducing level(s) so end the lists on the way */
+		if (((MANPAGE_DATA*)draw_state->format_state)->list_level != UINT_MAX)
+		{
+			manpage_list_level_up(draw_state,level);
+		}
+	}
+	else if (((MANPAGE_DATA*)draw_state->format_state)->list_level < level)
+	{
+		/* going up a level */
+		write(draw_state->output_file,troff_margin_right,troff_margin_right_size);
+	}
+	
+	/* write the new list start and set the level */
+	((MANPAGE_DATA*)draw_state->format_state)->list_level = level;
+
+	level_index_set_level(&draw_state->list_index,level);
+
+	if (marker == '*')
+	{
+		write(draw_state->output_file,troff_bullet,troff_bullet_size);
+	}
+	else
+	{
+		write(draw_state->output_file,"\\",1);
+		write(draw_state->output_file,&marker,1);
+	}
+	write(draw_state->output_file,"\n",1);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * name: format_list_numeric_start
+ * desc: The format output essentially does nothing.
+ *--------------------------------------------------------------------------------*/
+void	format_list_numeric_start(DRAW_STATE* draw_state, unsigned int level)
+{
+	NAME			number = {NULL,0,0,0};
+	unsigned int	index;
+	unsigned char	number_buffer[40];
+
+	if (((MANPAGE_DATA*)draw_state->format_state)->list_level > level)
+	{
+		/* reducing level(s) so end the lists on the way */
+		if (((MANPAGE_DATA*)draw_state->format_state)->list_level != UINT_MAX)
+		{
+			manpage_list_level_up(draw_state,level);
+		}
+	}
+	else if (((MANPAGE_DATA*)draw_state->format_state)->list_level < level)
+	{
+		/* going up a level */
+		write(draw_state->output_file,troff_margin_right,troff_margin_right_size);
+	}
+	
+	/* write the new list start and set the level */
+	((MANPAGE_DATA*)draw_state->format_state)->list_level = level;
+
+	level_index_set_level(&draw_state->list_index,level);
+	index = level_index_get_index(&draw_state->list_index,level);
+
+	/* convert and output the number */
+	number.name = number_buffer;
+	number.name_length = IntToAlphaSafe(index,number_buffer,sizeof(number_buffer));
+
+	number_buffer[number.name_length-1] = '.';
+	format_text(draw_state,OUTPUT_TEXT_STYLE_T_SPACE,&number);
+}
+
+/*----- FUNCTION -----------------------------------------------------------------*
+ * name: format_list_end
+ * desc: The format output essentially does nothing.
+ *--------------------------------------------------------------------------------*/
+void	format_list_end(DRAW_STATE* draw_state)
+{
+	write(draw_state->output_file,troff_new_para,troff_new_para_size);
+	write(draw_state->output_file,"\n",1);
 }
 

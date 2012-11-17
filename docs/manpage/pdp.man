@@ -1,0 +1,138 @@
+
+.TH pdp 1
+.LP
+
+.LP
+
+.B Name
+.I pdp
+.LP
+.B Synopsis
+.LP
+.B pdp
+.
+[
+.B -v
+.
+] 
+.B -i
+.
+<input_model_file_name> 
+[
+.B -o
+.
+<output directory name> 
+] 
+[
+.B -?
+.
+] 
+.B files
+.
+\&... 
+.LP
+.LP
+.B Options
+.LP
+.TS
+left,tab(#);
+lb  lb.
+T{
+-v
+T}#T{
+
+T}
+#T{
+This produces extra output information during the generation of the output. 
+T}
+T{
+-q
+T}#T{
+
+T}
+#T{
+quiet. This flag suppresses any non-error output from the application. 
+T}
+T{
+-i
+T}#T{
+<input_model_file_name>
+T}
+#T{
+input model filename. This is the linked model file that is used to generate the final documents. 
+T}
+T{
+-o
+T}#T{
+<output directory name>
+T}
+#T{
+This names the directory that the output id placed in. If this parameter is not given then the application defaults to 'output'. 
+T}
+T{
+-d
+T}#T{
+<install directory name>
+T}
+#T{
+This names the directory that the resource files and other support files are found in. If this parameter is not set then it will default to 'HOME/.doc_gen'. 
+T}
+T{
+-?
+T}#T{
+
+T}
+#T{
+This outputs the help message. 
+T}
+T{
+files
+T}#T{
+
+T}
+#T{
+One or more document files to produce output for. This file contains the markup that will be processed and will be used as the structure for producing the output.  The file name can be prepended with the format that is  required.  i.e. manpage:source.md 
+T}
+.TE
+
+.LP
+.PD 4 
+
+.B MarkDown Supported Format
+.RS
+The format of markdown that is supported is a (at the moment) subset of that described at: http://daringfireball.net/projects/markdown/ It does not currently support underling but that will change. Also it is intended to extend the markup by adding support for tables and a couple of other features. See the specification for details.
+.RE
+
+.PD 4 
+
+.B Description
+.RS
+This utility is the document processor. It will handle the processing of the structural documents with the data recovered from the source files. The document processor will take load a model file that have been linked with the 
+.B pdsl
+.
+application and one or more source document files. These file hold the structured document that the processor will add the elements from the module into. The processor expects the source file to be markdown formatted. 
+.B note
+.
+this application does not strictly follow the markdown specification yet, but it will. It may extend the format to be able to add new features. See 
+.B doc_gen_markdown
+.
+for details. Markdown has been chosen as it is a simple markup language that leaves the original text in an almost readable state. The syntax marking does not stand out too much in the text.
+.RE
+
+.PD 4 
+
+.B Error Reporting
+.RS
+Please report any problems to https://github.com/PAntoine/docgen
+.RE
+
+.PD 4 
+
+.B Author 
+.RS
+Peter Antoine
+.RE
+
+.PD
+.LP
+more text from the file that can be used. 

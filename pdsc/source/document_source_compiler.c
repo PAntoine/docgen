@@ -49,8 +49,10 @@
 
 #include "atoms.h"
 #include "error_codes.h"
+#include "lookup_tables.h"
 #include "input_formats.h"
 #include "document_generator.h"
+#include "document_source_compiler.h"
 
 /*--------------------------------------------------------------------------------*
  * Global Settings (with defaults)
@@ -86,7 +88,7 @@ extern unsigned int		g_date_offset;
  * Name : write_string
  * Desc : This function will write a string to the output file.
  *--------------------------------------------------------------------------------*/
-void	write_string(int output_file, NAME* string)
+static void	write_string(int output_file, NAME* string)
 {
 	unsigned char	length[2];
 
@@ -113,7 +115,7 @@ void	write_string(int output_file, NAME* string)
  * Name : output_atoms
  * Desc : This function will output a lookup table to the output file.
  *--------------------------------------------------------------------------------*/
-void output_atoms (int output_file, ATOM_INDEX* index)
+static void output_atoms (int output_file, ATOM_INDEX* index)
 {
 	unsigned int	size;
 	unsigned int	count;
@@ -235,7 +237,7 @@ void output_atoms (int output_file, ATOM_INDEX* index)
  * Name : output_type
  * Desc : This function will output a type to the file.
  *--------------------------------------------------------------------------------*/
-void	output_type(int output_file, ATOM_ATOMS atom_type, unsigned short api_id, unsigned short line_num, NAME* return_type, NAME* name, NAME* brief)
+static void	output_type(int output_file, ATOM_ATOMS atom_type, unsigned short api_id, unsigned short line_num, NAME* return_type, NAME* name, NAME* brief)
 {
 	unsigned char	empty[] = {0x00,0x00};
 	unsigned char	length[2];
@@ -285,7 +287,7 @@ void	output_type(int output_file, ATOM_ATOMS atom_type, unsigned short api_id, u
  * Name : output_empty
  * Desc : This function will output the empty record.
  *--------------------------------------------------------------------------------*/
-void	output_empty(int output_file, ATOM_ATOMS atom)
+static void	output_empty(int output_file, ATOM_ATOMS atom)
 {
 	unsigned char	record[RECORD_DATA_START];
 
@@ -308,7 +310,7 @@ void	output_empty(int output_file, ATOM_ATOMS atom)
  * Name : output_api_function
  * Desc : This function outputs the contents of the api function to the file.
  *--------------------------------------------------------------------------------*/
-void	output_api_function(int output_file, API_FUNCTION* function, unsigned short group_id, unsigned short line_num)
+static void	output_api_function(int output_file, API_FUNCTION* function, unsigned short group_id, unsigned short line_num)
 {
 	API_PARAMETER*	current_parameter = function->parameter_list;
 
@@ -329,7 +331,7 @@ void	output_api_function(int output_file, API_FUNCTION* function, unsigned short
  * Name : output_lookup
  * Desc : This function will output a lookup table to the output file.
  *--------------------------------------------------------------------------------*/
-void output_lookup (int output_file, LOOKUP_LIST* lookup_list, unsigned int type)
+static void output_lookup (int output_file, LOOKUP_LIST* lookup_list, unsigned int type)
 {
 	unsigned int	count;
 	unsigned int	data_size;
@@ -397,7 +399,7 @@ void output_lookup (int output_file, LOOKUP_LIST* lookup_list, unsigned int type
  * Desc : This function will create the object file that holds all the atoms
  *        that have been recovered from the input file.
  *--------------------------------------------------------------------------------*/
-unsigned int	generate_output(ATOM_INDEX* atom_index, char* filename, char* input_name)
+static unsigned int	generate_output(ATOM_INDEX* atom_index, char* filename, char* input_name)
 {
 	int				outfile;
 	unsigned int	in_size;
@@ -472,243 +474,10 @@ unsigned int	generate_output(ATOM_INDEX* atom_index, char* filename, char* input
  * Name : init_atoms_index
  * Desc : This function will initialise an ATOMS_index item.
  *--------------------------------------------------------------------------------*/
-void init_atoms_index ( ATOM_INDEX* index )
+static void init_atoms_index ( ATOM_INDEX* index )
 {
 	memset(index,0,sizeof(ATOM_INDEX));
 	index->last = &index->index;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : find_lookup
- * Desc : This function will find a lookup in the lookup table.
- *--------------------------------------------------------------------------------*/
-LOOKUP_ITEM* find_lookup ( LOOKUP_LIST* lookup_list, unsigned char* name, unsigned int name_length )
-{
-	unsigned int	hash = fnv_32_hash(name,name_length);
-	unsigned int	count;
-	unsigned int	index_count = 0;
-	LOOKUP_ITEM*	result = NULL;
-	LOOKUP_LIST*	current = lookup_list;
-	LOOKUP_LIST*	previous = current;
-	
-	while (current != NULL && result == NULL)
-	{
-		for (count=0;count<current->num_items;count++)
-		{
-			if (current->lookup[count].hash == hash)
-			{
-				result = &current->lookup[count];
-				break;
-			}
-		}
-
-		index_count++;
-		previous = current;
-		current = current->next;
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : set_lookup_group
- * Desc : This function will set the lookup items group field.
- *--------------------------------------------------------------------------------*/
-void	set_lookup_group(LOOKUP_ITEM *item, unsigned short group_id)
-{
-	item->group_id = group_id;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : set_lookup_name
- * Desc : This function will set the lookup name.
- *--------------------------------------------------------------------------------*/
-void	set_lookup_name(LOOKUP_ITEM *item, NAME* name, unsigned short line_num)
-{
-	unsigned int	hash = fnv_32_hash(name->name,name->name_length);
-	
-	item->hash = hash;
-	item->line_num = line_num;
-	item->name_length = name->name_length;
-	
-	item->name = malloc(name->name_length);
-	memcpy(item->name,name->name,name->name_length);
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : new_lookup
- * Desc : This function will create a new lookup slot.
- *--------------------------------------------------------------------------------*/
-unsigned int new_lookup ( LOOKUP_LIST* lookup_list )
-{
-	unsigned int	result = INVALID_ITEM;
-	unsigned int	index_count = 0;
-	LOOKUP_LIST*	current = lookup_list;
-	LOOKUP_LIST*	previous = current;
-	
-	/* find the end of the index */
-	while (current != NULL && result == INVALID_ITEM)
-	{
-		index_count++;
-		previous = current;
-		current = current->next;
-	}
-
-	if (previous->num_items < LOOKUP_INDEX_SIZE)
-	{
-		/*OK, we have space in the first block */
-		index_count--;
-		
-		result = (index_count * LOOKUP_INDEX_SIZE) + previous->num_items;
-		previous->num_items++;
-	}
-	else
-	{
-		/* need to add a block to the lookup table */
-		LOOKUP_LIST* temp = calloc(1,sizeof(LOOKUP_LIST));
-		previous->next = temp;
-
-		result = ((index_count) * LOOKUP_INDEX_SIZE);
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : add_lookup
- * Desc : This function will find a lookup if it exists and if it does not then it
- *        adds it.
- *--------------------------------------------------------------------------------*/
-unsigned int add_lookup ( LOOKUP_LIST* lookup_list, char* name, unsigned int name_length, char* payload, unsigned int payload_length, unsigned short line_num )
-{
-	unsigned int	hash = fnv_32_hash(name,name_length);
-	unsigned int	count;
-	unsigned int	result = INVALID_ITEM;
-	unsigned int	index_count = 0;
-	LOOKUP_LIST*	current = lookup_list;
-	LOOKUP_LIST*	previous = current;
-	
-	while (current != NULL && result == INVALID_ITEM)
-	{
-		for (count=0;count<current->num_items;count++)
-		{
-			if (current->lookup[count].hash == hash)
-			{
-				result = (index_count * LOOKUP_INDEX_SIZE) + count;
-				break;
-			}
-		}
-
-		index_count++;
-		previous = current;
-		current = current->next;
-	}
-
-	if (result == INVALID_ITEM)
-	{
-		if (previous->num_items < LOOKUP_INDEX_SIZE)
-		{
-			index_count--;
-			
-			previous->lookup[previous->num_items].hash = hash;
-			previous->lookup[previous->num_items].line_num = line_num;
-			previous->lookup[previous->num_items].name_length = name_length;
-			
-			previous->lookup[previous->num_items].name = malloc(name_length);
-			memcpy(previous->lookup[previous->num_items].name,name,name_length);
-
-			previous->lookup[previous->num_items].payload = malloc(payload_length);
-			previous->lookup[previous->num_items].payload_length = payload_length;
-			memcpy(previous->lookup[previous->num_items].payload,payload,payload_length);
-
-			result = (index_count * LOOKUP_INDEX_SIZE) + previous->num_items;
-			previous->num_items++;
-		}
-		else
-		{
-			LOOKUP_LIST* temp = calloc(1,sizeof(LOOKUP_LIST));
-			previous->next = temp;
-	
-			temp->lookup[0].hash = hash;
-			temp->lookup[0].line_num = line_num;
-			temp->lookup[0].name_length = name_length;
-			
-			temp->lookup[0].name = malloc(name_length);
-			memcpy(temp->lookup[0].name,name,name_length);
-	
-			temp->lookup[0].payload = malloc(payload_length);
-			temp->lookup[0].payload_length = payload_length;
-			memcpy(previous->lookup[0].payload,payload,payload_length);
-
-			temp->num_items = 1;
-			
-			result = (index_count * LOOKUP_INDEX_SIZE);
-		}
-	}
-
-	return result;
-}
-
-/*----- FUNCTION -----------------------------------------------------------------*
- * Name : find_add_lookup
- * Desc : This function will find a lookup if it exists and if it does not then it
- *        adds it.
- *--------------------------------------------------------------------------------*/
-unsigned int find_add_lookup ( LOOKUP_LIST* lookup_list, unsigned char* name, unsigned int name_length )
-{
-	unsigned int	hash = fnv_32_hash(name,name_length);
-	unsigned int	count;
-	unsigned int	result = INVALID_ITEM;
-	unsigned int	index_count = 0;
-	LOOKUP_LIST*	current = lookup_list;
-	LOOKUP_LIST*	previous = current;
-	
-	while (current != NULL && result == INVALID_ITEM)
-	{
-		for (count=0;count<current->num_items;count++)
-		{
-			if (current->lookup[count].hash == hash)
-			{
-				result = (index_count * LOOKUP_INDEX_SIZE) + count;
-				break;
-			}
-		}
-
-		index_count++;
-		previous = current;
-		current = current->next;
-	}
-	
-	if (result == INVALID_ITEM)
-	{
-		if (previous->num_items < LOOKUP_INDEX_SIZE)
-		{
-			index_count--;
-
-			previous->lookup[previous->num_items].hash = hash;
-			previous->lookup[previous->num_items].name = malloc(name_length);
-			previous->lookup[previous->num_items].name_length = name_length;
-			memcpy(previous->lookup[previous->num_items].name,name,name_length);
-
-			result = (index_count * LOOKUP_INDEX_SIZE) + previous->num_items;
-			previous->num_items++;
-		}
-		else
-		{
-			LOOKUP_LIST* temp = calloc(1,sizeof(LOOKUP_LIST));
-			previous->next = temp;
-	
-			temp->lookup[0].hash = hash;
-			temp->lookup[0].name = malloc(name_length);
-			temp->lookup[0].name_length = name_length;
-			memcpy(temp->lookup[0].name,name,name_length);
-			temp->num_items = 1;
-			
-			result = (index_count * LOOKUP_INDEX_SIZE);
-		}
-	}
-
-	return result;
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -718,7 +487,7 @@ unsigned int find_add_lookup ( LOOKUP_LIST* lookup_list, unsigned char* name, un
  *        add the parameter. It will add the description to the parameter if it 
  *        had to add it or not.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_parameter_brief(API_FUNCTION* function, NAME* parameter_name, NAME* brief)
+static unsigned int	add_parameter_brief(API_FUNCTION* function, NAME* parameter_name, NAME* brief)
 {
 	unsigned int 	result = EC_INVALID_PARAMETER;
 	API_PARAMETER*	new_parameter;
@@ -788,7 +557,7 @@ unsigned int	add_parameter_brief(API_FUNCTION* function, NAME* parameter_name, N
  *        name if the parameter does not exist. It will return true if it had to
  *        add the parameter.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_parameter_type(API_FUNCTION* function, NAME* parameter_name, NAME* type)
+static unsigned int	add_parameter_type(API_FUNCTION* function, NAME* parameter_name, NAME* type)
 {
 	unsigned int 	result = EC_INVALID_PARAMETER;
 	API_PARAMETER*	new_parameter;
@@ -921,7 +690,7 @@ static unsigned int get_macro_name ( unsigned char* buffer, unsigned char** name
  * Name : add_atom
  * Desc : This function will add an atom to the atom index.
  *--------------------------------------------------------------------------------*/
-ATOM_ITEM* add_atom ( ATOM_INDEX* list, unsigned int type, ATOM_ATOMS atom )
+static ATOM_ITEM* add_atom ( ATOM_INDEX* list, unsigned int type, ATOM_ATOMS atom )
 {
 	ATOM_ITEM*	result = NULL;
 	
@@ -986,7 +755,7 @@ static unsigned int add_name_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned 
  * Name : add_boolean_atom
  * Desc : This function will add the string literal item to the atom index.
  *--------------------------------------------------------------------------------*/
-void add_boolean_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned int true_false)
+static void add_boolean_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned int true_false)
 {
 	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_BOOLEAN,atom);
 	
@@ -1052,7 +821,7 @@ void add_api_end_atom (ATOM_INDEX* list, unsigned short group_id)
  * Desc : This function will add the multiline atom, it will trim the white space
  *        from the front and the end of the string.
  *--------------------------------------------------------------------------------*/
-unsigned int	add_multiline_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* string, unsigned int string_length, unsigned int input_type, unsigned int* end_comment, unsigned int dont_trim)
+static unsigned int	add_multiline_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* string, unsigned int string_length, unsigned int input_type, unsigned int* end_comment, unsigned int dont_trim)
 {
 	unsigned int	size = 0;
 	unsigned int	count;
@@ -1110,7 +879,7 @@ unsigned int	add_multiline_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned ch
  * Name : add_number_atom
  * Desc : This function will add the numeric value to the atom list.
  *--------------------------------------------------------------------------------*/
-void add_number_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned int number, unsigned int func_api )
+static void add_number_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned int number, unsigned int func_api )
 {
 	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_NUMBERIC,atom);
 	
@@ -1126,7 +895,7 @@ void add_number_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned int number, u
  * Name : add_pair_atom
  * Desc : This function will add the atom pair.
  *--------------------------------------------------------------------------------*/
-void add_pair_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* name, unsigned int name_length, unsigned char* string, unsigned int string_length, unsigned int func_api )
+void add_pair_atom ( ATOM_INDEX* list, ATOM_ATOMS atom, unsigned char* name, unsigned int name_length, unsigned char* string, unsigned int string_length)
 {
 	ATOM_ITEM*	item = add_atom(list,INTERMEDIATE_RECORD_PAIR,atom);
 
@@ -1244,7 +1013,7 @@ static unsigned int decode_name(unsigned char* buffer, ATOM_INDEX* atom_list, AT
  * Name : decode_name_string
  * Desc : This function will decode a NAME from the input.
  *--------------------------------------------------------------------------------*/
-unsigned int decode_name_string (unsigned char* buffer, unsigned int buffer_length, NAME* string)
+static unsigned int decode_name_string (unsigned char* buffer, unsigned int buffer_length, NAME* string)
 {
 	unsigned int count = 0;
 
@@ -1269,7 +1038,7 @@ unsigned int decode_name_string (unsigned char* buffer, unsigned int buffer_leng
  * Desc : This function will decode a binary atom. The atom string should be either
  *        yes or no.
  *--------------------------------------------------------------------------------*/
-unsigned int decode_boolean (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
+static unsigned int decode_boolean (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
 {
 	unsigned int 	count = 0;
 	unsigned int	true_false = 0;
@@ -1305,7 +1074,7 @@ unsigned int decode_boolean (unsigned char* buffer, unsigned int buffer_length, 
  *        Actually there is not much to do, as the string will be all data on the
  *        line to the end, so just add it to the atom list.
  *--------------------------------------------------------------------------------*/
-unsigned int decode_string (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
+static unsigned int decode_string (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
 {
 	unsigned int count = 0;
 
@@ -1330,7 +1099,7 @@ unsigned int decode_string (unsigned char* buffer, unsigned int buffer_length, A
  *        the strings to be a name and a string. The will be one or more white
  *        space chars separating the pair.
  *--------------------------------------------------------------------------------*/
-void decode_pair (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
+static void decode_pair (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom, unsigned int function )
 {
 	unsigned int count;
 	unsigned int name_length = 0;
@@ -1360,7 +1129,7 @@ void decode_pair (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX*
 		count++;
 	}
 
-	add_pair_atom(atom_list,atom,buffer,name_length,&buffer[count],buffer_length - count,function);
+	add_pair_atom(atom_list,atom,buffer,name_length,&buffer[count],buffer_length - count);
 }
 
 /*----- FUNCTION -----------------------------------------------------------------*
@@ -1369,7 +1138,7 @@ void decode_pair (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX*
  *        Actually there is not much to do, as the group will be all data on the
  *        line to the end, so just add it to the atom list.
  *--------------------------------------------------------------------------------*/
-unsigned short decode_group (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom)
+static unsigned short decode_group (unsigned char* buffer, unsigned int buffer_length, ATOM_INDEX* atom_list, ATOM_ATOMS atom)
 {
 	unsigned int count;
 	unsigned short result;
@@ -1394,7 +1163,7 @@ unsigned short decode_group (unsigned char* buffer, unsigned int buffer_length, 
  *        Actually there is not much to do, as the application will be all data on the
  *        line to the end, so just add it to the atom list.
  *--------------------------------------------------------------------------------*/
-unsigned short decode_application (unsigned char* buffer, unsigned int buffer_length)
+static unsigned short decode_application (unsigned char* buffer, unsigned int buffer_length)
 {
 	unsigned int count;
 	unsigned short result;
@@ -1417,7 +1186,7 @@ unsigned short decode_application (unsigned char* buffer, unsigned int buffer_le
  *        Note: there is NO formatting done on the data repeated as it is in the
  *        original file.
  *--------------------------------------------------------------------------------*/
-void	collect_sample(LOOKUP_ITEM *item, unsigned char* data, unsigned int data_length)
+static void	collect_sample(LOOKUP_ITEM *item, unsigned char* data, unsigned int data_length)
 {
 	void*			temp;
 	unsigned int	new_size = item->payload_length + data_length + 1;
@@ -2248,7 +2017,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		if ((input_file_type = input_decode_format(infile_name)) == INPUT_FORMAT_INVALID)
+		if ((input_file_type = input_decode_format((unsigned char*)infile_name)) == INPUT_FORMAT_INVALID)
 		{
 			/* A file type that we don't support */
 			raise_warning(0,EC_UNSUPPORTED_INPUT_FILE,(unsigned char*)infile_name,NULL);
@@ -2275,7 +2044,7 @@ int main(int argc, char* argv[])
 				/* application 0 - means not defined so add a default */
 				find_add_lookup(&g_applications,(unsigned char*)"",0);
 
-				while((linesize = getline((char**)&line_buffer,&buffer_size,input_file)) != -1)
+				while((linesize = getline((char**)&line_buffer,(size_t*)&buffer_size,input_file)) != -1)
 				{
 					raw_atoms.line_number++;
 

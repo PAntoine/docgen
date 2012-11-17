@@ -1,0 +1,68 @@
+types:
+
+Need to add them to the file in as language agnostic way as possible.
+
+so:
+TYPE_START		- empty record type
+TYPE_TAG		- fair enough only C will use this but does not hurt to add
+TYPE_NAME		- name of the compound type
+TYPE_RECORD		- a record for the type
+TYPE_START		- if this happens before an end then it is a sub-type
+TYPE_END		- the end of a type
+TYPE_BRIEF		- the description of the preceding item.
+
+So for the START use INTERMEDIATE_RECORD_START and the end use INTERMEDIATE_RECORD_START.
+for the NAME use INTERMEDIATE_RECORD_STRING with the ATOM as ATOM_NAME, and for tag ATOM_TAG.
+
+For record use INTERMEDIATE_RECORD_TYPE.
+For Brief use INTERMEDIATE_RECORD_STRING with the ATOM_BRIEF as the atom.
+
+The problem:
+
+As this is just to produce documentation and not compile the code we only need the start and
+the lines of the type, so the structure should actually be:
+
+TYPE_START	- empty record
+TYPE_LINE	- {type,name}
+TYPE_BRIEF	- string for a description of the type.
+TYPE_END	- this ends the records.
+
+No other structure is required.
+
+-------------------------
+
+The layout of the type should look like:
+
+type_header
+	record_line			description
+	record_line			description
+end_record
+
+If the item has defaults/is a constant
+
+record_header
+	record_name	=	default		description
+end_record
+
+The record name should be kept separately so that indexing and other stuff can be done with it.
+
+
+Type Layout:
+
+type name: <type name>
+
+Description:
+fdfsda
+fsdfsdfdsfsdfsdfsdfsdfsdf sdf sdf sdf sdf sdf sdf sdf sd fsd fsd fsd fs df sdfsdfsd
+fdsf sdfsd fsd fsd fsd fsd fsd fsd ffgfdh j h hg jgh jgh jgh  jtrj tr rw j  
+
+Fields:
+
+     Name        Type                  Description
+	 ----------  --------------------- ------------------------------------------
+
+or
+
+     Name        value                 Description
+	 ----------  --------------------- ------------------------------------------
+

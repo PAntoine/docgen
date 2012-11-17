@@ -1,0 +1,42 @@
+
+
+Name    pdsc
+
+Synopsis
+*pdsc* [*-v*] [*-q*] *-o*<output file name> *-D*MACRO_NAME=MACRO_VALUE ... *input_file*
+
+
+Options
+    -v                                                                                                                  
+                This produces extra output information during the generation of the output.                             
+    -q                                                                                                                  
+                quiet. This flag suppresses any non-error output from the application.                                  
+    -o          <output file name>                                                                                      
+                This function defines the name of the output file produced by this application. If the name is not  
+                given then it will default to "doc.pdso".                                                               
+    -D          MACRO_NAME=MACRO_VALUE                                                                                  
+                The macro value is used to allow for strings passed into the build to be substituted within some of  
+                the symbol names. This allows for the same code and markup to be used within the same document without  
+                the name clashing.                                                                                      
+    -?                                                                                                                  
+                This outputs the help message.                                                                          
+    input_file                                                                                                          
+                The source code file to compile.                                                                        
+
+Description
+    Document Source Compiler This function will search the given source files to locate the special markup symbols that are
+    specified within comment blocks. The symbols are specified  by special tokens that start with the *at* symbol. This file
+    will generate a file that has all the data that has been collected from the source file. This object file generated
+    should be linked together with the *pdsl* application and then documents can be generated from the system using the
+    *pdp* application. The purpose of this system it to allow for generic documentation to be create from the build, and
+    tailored to a specific build configuration.
+
+
+Error Reporting
+    Please report any problems to https://github.com/PAntoine/docgen
+
+
+Author 
+    Peter Antoine
+
+

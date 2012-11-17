@@ -1,0 +1,54 @@
+
+
+Name    pdp
+
+Synopsis
+*pdp* [*-v*] *-i*<input_model_file_name> [*-o*<output directory name> ] [*-?*] *files*... 
+
+
+Options
+    -v                                                                                                             
+           This produces extra output information during the generation of the output.                             
+    -q                                                                                                             
+           quiet. This flag suppresses any non-error output from the application.                                  
+    -i     <input_model_file_name>                                                                                 
+           input model filename. This is the linked model file that is used to generate the final documents.       
+    -o     <output directory name>                                                                                 
+           This names the directory that the output id placed in. If this parameter is not given then the  
+           application defaults to 'output'.                                                                       
+    -d     <install directory name>                                                                                
+           This names the directory that the resource files and other support files are found in. If this  
+           parameter is not set then it will default to 'HOME/.doc_gen'.                                           
+    -?                                                                                                             
+           This outputs the help message.                                                                          
+    files                                                                                                          
+           One or more document files to produce output for. This file contains the markup that will be processed  
+           and will be used as the structure for producing the output.  The file name can be prepended with the  
+           format that is  required.  i.e. manpage:source.md                                                       
+
+MarkDown Supported Format
+    The format of markdown that is supported is a (at the moment) subset of that described at:
+    http://daringfireball.net/projects/markdown/ It does not currently support underling but that will change. Also it is
+    intended to extend the markup by adding support for tables and a couple of other features. See the specification for
+    details.
+
+
+Description
+    This utility is the document processor. It will handle the processing of the structural documents with the data
+    recovered from the source files. The document processor will take load a model file that have been linked with the
+    *pdsl* application and one or more source document files. These file hold the structured document that the processor
+    will add the elements from the module into. The processor expects the source file to be markdown formatted. *note* this
+    application does not strictly follow the markdown specification yet, but it will. It may extend the format to be able to
+    add new features. See *doc_gen_markdown* for details. Markdown has been chosen as it is a simple markup language that
+    leaves the original text in an almost readable state. The syntax marking does not stand out too much in the text.
+
+
+Error Reporting
+    Please report any problems to https://github.com/PAntoine/docgen
+
+
+Author 
+    Peter Antoine
+
+
+more text from the file that can be used. 

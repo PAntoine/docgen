@@ -16,6 +16,7 @@
 #include <memory.h>
 #include "symbols.h"
 #include "input_formats.h"
+#include "document_source_compiler.h"
 
 /*--------------------------------------------------------------------------------*
  * Global Settings (with defaults)
@@ -108,7 +109,7 @@ extern SYMBOLS_STRING_TABLE	symbols_table[];
  *       symbol is returned in the 'symbol' parameter. This will help in some 
  *       of the searches so it does not have to search again to find the symbol.
  *--------------------------------------------------------------------------------*/
-unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsigned int *pos,NAME* return_type, NAME* name,unsigned int* symbol)
+static unsigned int	c_get_type_name(unsigned char* line,unsigned int line_length,unsigned int *pos,NAME* return_type, NAME* name,unsigned int* symbol)
 {
 	int						word;
 	unsigned int			token_start;
