@@ -14,13 +14,13 @@
 #                    Released Under the Artistic Licence
 #---------------------------------------------------------------------------------
 
-include build/platform_config.mak
-
 #--------------------------------------------------------------------------------
 # Default build configuration
 #--------------------------------------------------------------------------------
 export BUILD_ROOT		= $(CURDIR)
 export ALL_COMPONENTS	= $(subst /,,$(dir $(wildcard */makefile)))
+
+include build/platform_config.mak
 
 # user can override this on the command line	
 export BUILD_TYPE ?= $(BUILD_OS)_$(MACHINE_NAME)
